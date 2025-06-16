@@ -3,7 +3,7 @@
 Dive into the dark depths and guide your resilient bubble towards the light in this challenging arcade-style ascent game! Navigate treacherous underwater caverns, avoid dangerous marine life, and collect precious air to survive your journey to the surface.
 
 <div align="left">
-  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/tin2tin/Reach_for_the_Air/master/index_enhanced.html">PLAY</a><br><br>
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/tin2tin/Reach_for_the_Air/master/index.html">PLAY</a><br><br>
 </div>
 
 ## 🌟 Features
