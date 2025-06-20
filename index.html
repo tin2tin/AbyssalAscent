@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html>
 <head>
@@ -166,9 +165,9 @@
         const MIN_CEILING_UNDERSIDE_GAP_FACTOR = 0.35;
         const MAX_CEILING_UNDERSIDE_GAP_FACTOR = 0.40;
         const BOTTOM_DEATH_FLOOR_HEIGHT = 20;
-        const EXIT_CEILING_HEIGHT = 70; // Funnel height
+        const EXIT_CEILING_HEIGHT = 25;
         const TOP_SURFACE_DEATH_Y = 10;
-        const EXIT_CEILING_UNDERSIDE_Y = TOP_SURFACE_DEATH_Y + EXIT_CEILING_HEIGHT;
+        const EXIT_CEILING_UNDERSIDE_Y = TOP_SURFACE_DEATH_Y + EXIT_CEILING_HEIGHT + 25;
         const PLATFORM_CORNER_RADIUS = 10;
         const STARTING_DEPTH = 1000;
         const DEPTH_DECREASE_PER_LEVEL = 7;
@@ -215,7 +214,6 @@
 
         let seaFloorDecorations = [];
         let abyssBackgroundLayers = [];
-        let spawnAnimation = { active: false, timer: 0 };
 
         // Audio state
         let audioContext;
@@ -232,7 +230,7 @@
         // 4. GAME CLASSES
         //================================================================
         class GameEffectParticle{ constructor(x,y,type,color,size,vx,vy,lifetime){this.x=x;this.y=y;this.type=type;this.color=color;this.size=size;this.vx=vx;this.vy=vy;this.alpha=1;this.lifetime=lifetime;this.originalLifetime=this.lifetime;this.buoyancyEffect=(type==='push_down_burst'||type==='geyser_burst')?5.4:((type==='attach_clink')?1.8:-3.6); if(type==='lurker_ink_cloud') this.buoyancyEffect = (Math.random()-0.5) * 1.2; if(type==='lurker_ink_splat') this.buoyancyEffect = -1.8;} update(dt){this.x+=this.vx*dt;this.y+=this.vy*dt;this.vy+=this.buoyancyEffect*dt;this.vy*=(1-(1.2*dt));this.vx*=(1-(1.2*dt));this.lifetime-=dt;this.alpha=this.lifetime/this.originalLifetime;this.size*=(this.type==='gem_shine'||this.type==='lurker_ink_splat'||this.type==='lurker_ink_cloud'?(1-1.8*dt):(1-4.2*dt));if(this.lifetime<=0||this.size<0.2)this.lifetime=0;} draw(ctx){if(this.lifetime<=0)return;ctx.save();ctx.globalAlpha=this.alpha;ctx.fillStyle=this.color;ctx.beginPath();ctx.arc(this.x,this.y,this.size,0,Math.PI*2);ctx.fill();ctx.restore();}}
-        class AmbientBubble { constructor(isParallaxLayer, type = 'ambient') { this.isParallax = isParallaxLayer; this.type = type; this.reset(); } reset() { if (this.type === 'foreground') { this.radius = 25 + Math.random() * 25; this.x = Math.random() * TARGET_CANVAS_WIDTH; this.y = Math.random() * TARGET_CANVAS_HEIGHT; this.baseSpeedY = -(6 + Math.random() * 9); this.speedY = this.baseSpeedY; this.speedX = (Math.random() - 0.5) * 6; this.alpha = 0.04 + Math.random() * 0.06; this.color = `rgba(200, 235, 255, ${this.alpha})`; this.isParallax = true; } else { this.radius = this.isParallax ? (3 + Math.random() * 7) : (2 + Math.random() * 4); this.x = Math.random() * TARGET_CANVAS_WIDTH; this.y = Math.random() * (TARGET_CANVAS_HEIGHT * 1.2); this.baseSpeedY = -(this.isParallax ? (21 + Math.random() * 39) : (54 + Math.random() * 120)); this.speedY = this.baseSpeedY; this.speedX = (Math.random() - 0.5) * (this.isParallax ? 15 : 27); this.alpha = (this.isParallax ? 0.05 : 0.2) + Math.random() * (this.isParallax ? 0.18 : 0.35); this.color = `rgba(170, 220, 255, ${this.alpha})`; } this.stuckTimer = 0; this.platformInfluenceX = 0; } update(dt) { this.y += this.speedY*dt; this.x += (this.speedX + this.platformInfluenceX)*dt; this.platformInfluenceX *= (1 - 9 * dt); this.speedY *= (1 - 0.12 * dt); this.speedX *= (1 - 0.6 * dt); if (this.y < -this.radius * 3) { this.reset(); } if (this.type === 'ambient' && !this.isParallax && this.stuckTimer <= 0) { for (const p of platforms) { if (p.deadly || p.type === 'ocean_floor') continue; if (this.x + this.radius > p.x && this.x - this.radius < p.x + p.width && this.y + this.radius > p.y && this.y - this.radius < p.y + p.height) { if (Math.abs(this.speedY) > 3) { this.speedY *= -0.3; this.y += this.speedY * 2.5 * dt; this.stuckTimer = 0.16 + Math.random() * 0.33; } this.platformInfluenceX += (this.x < p.x + p.width / 2 ? -6 : 6); break; } } } if (this.stuckTimer > 0) { this.stuckTimer -= dt; this.speedY = this.baseSpeedY * 0.05; } else { this.speedY = Math.min(this.speedY, this.baseSpeedY); } if (exitPlatform && exitPlatform.type === 'ascent_funnel' && !this.isParallax && this.type === 'ambient' && gameState === 'playing') { const pipeHeightRatio = 0.4; const funnelPipeY = exitPlatform.y + (exitPlatform.height * pipeHeightRatio) / 2; const funnelPipeX = exitPlatform.x + exitPlatform.width / 2; const dx = funnelPipeX - this.x; const dy = funnelPipeY - this.y; const distSq = dx * dx + dy * dy; const suckRadius = exitPlatform.width * 1.5; if (distSq < suckRadius * suckRadius && this.y < exitPlatform.y + exitPlatform.height) { const dist = Math.sqrt(distSq); const suckStrength = (1 - (dist / suckRadius)) * 1500; this.speedX += (dx / dist) * suckStrength * dt; this.speedY += (dy / dist) * suckStrength * dt; if (dist < exitPlatform.width * 0.2) { this.radius *= (1 - 30 * dt); if (this.radius < 0.5) { this.reset(); this.y = TARGET_CANVAS_HEIGHT + this.radius; } } } } } draw(ctx) { ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill(); } }
+        class AmbientBubble { constructor(isParallaxLayer, type = 'ambient') { this.isParallax = isParallaxLayer; this.type = type; this.reset(); } reset() { if (this.type === 'foreground') { this.radius = 25 + Math.random() * 25; this.x = Math.random() * TARGET_CANVAS_WIDTH; this.y = Math.random() * TARGET_CANVAS_HEIGHT; this.baseSpeedY = -(6 + Math.random() * 9); this.speedY = this.baseSpeedY; this.speedX = (Math.random() - 0.5) * 6; this.alpha = 0.04 + Math.random() * 0.06; this.color = `rgba(200, 235, 255, ${this.alpha})`; this.isParallax = true; } else { this.radius = this.isParallax ? (3 + Math.random() * 7) : (2 + Math.random() * 4); this.x = Math.random() * TARGET_CANVAS_WIDTH; this.y = Math.random() * (TARGET_CANVAS_HEIGHT * 1.2); this.baseSpeedY = -(this.isParallax ? (21 + Math.random() * 39) : (54 + Math.random() * 120)); this.speedY = this.baseSpeedY; this.speedX = (Math.random() - 0.5) * (this.isParallax ? 15 : 27); this.alpha = (this.isParallax ? 0.05 : 0.2) + Math.random() * (this.isParallax ? 0.18 : 0.35); this.color = `rgba(170, 220, 255, ${this.alpha})`; } this.stuckTimer = 0; this.platformInfluenceX = 0; } update(dt) { this.y += this.speedY*dt; this.x += (this.speedX + this.platformInfluenceX)*dt; this.platformInfluenceX *= (1 - 9 * dt); this.speedY *= (1 - 0.12 * dt); this.speedX *= (1 - 0.6 * dt); if (this.y < -this.radius * 3) { this.reset(); } if (this.type === 'ambient' && !this.isParallax && this.stuckTimer <= 0) { for (const p of platforms) { if (p.deadly || p.type === 'ocean_floor') continue; if (this.x + this.radius > p.x && this.x - this.radius < p.x + p.width && this.y + this.radius > p.y && this.y - this.radius < p.y + p.height) { if (Math.abs(this.speedY) > 3) { this.speedY *= -0.3; this.y += this.speedY * 2.5 * dt; this.stuckTimer = 0.16 + Math.random() * 0.33; } this.platformInfluenceX += (this.x < p.x + p.width / 2 ? -6 : 6); break; } } } if (this.stuckTimer > 0) { this.stuckTimer -= dt; this.speedY = this.baseSpeedY * 0.05; } else { this.speedY = Math.min(this.speedY, this.baseSpeedY); } } draw(ctx) { ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill(); } }
         class PowerUp{ constructor(x,y,type){ this.x=x;this.y=y;this.type=type;this.radius=14;this.collected=false;this.scale=1;this.symbol='';this.animationTimer=0;this.animationSpeed=3.6; switch(this.type){ case 'shield_bubble':this.color1='hsl(195, 45%, 70%)';this.color2='hsl(200, 50%, 60%)';this.symbol='SHD';break; case 'propulsion_boost':this.color1='hsl(120, 50%, 65%)';this.color2='hsl(140, 55%, 45%)';this.symbol='BST';break; case 'extra_life':this.color1='hsl(35, 70%, 60%)';this.color2='hsl(28, 75%, 45%)';this.symbol='+1UP';this.radius=16;break; case 'sonar_pulse':this.color1='hsl(280, 45%, 65%)';this.color2='hsl(270, 55%, 45%)';this.symbol='PULSE';break; } } draw(ctx){ if(this.collected)return; const offsetY=Math.sin(this.animationTimer)*6; drawCircleWithGradient(this.x,this.y+offsetY,this.radius,this.color1,this.color2,this.scale); ctx.fillStyle='black';ctx.strokeStyle='white';ctx.lineWidth=1.5; ctx.font = (this.type === 'extra_life') ? 'bold 10px Arial' : 'bold 11px Arial'; ctx.textAlign='center'; ctx.strokeText(this.symbol,this.x,this.y+offsetY+4);ctx.fillText(this.symbol,this.x,this.y+offsetY+4); } update(dt){this.animationTimer+=this.animationSpeed*dt;}}
         class AbyssalJellyfish { constructor(x, y) { this.x = x; this.y = y; this.radius = 20 + Math.random() * 10; this.speedX = (Math.random() - 0.5) * (0.4 * FPS); this.speedY = (0.15 + Math.random() * 0.25) * FPS; this.colorLight = `hsla(${180 + Math.random()*60}, 70%, 70%, 0.4)`; this.colorDark = `hsla(${190 + Math.random()*60}, 60%, 50%, 0.6)`;  this.type = 'jellyfish'; this.bobOffset = Math.random() * Math.PI * 2; this.bobSpeed = 1.5; this.tentacleCount = 6 + Math.floor(Math.random()*4); this.tentacleLengthBase = this.radius * 1.8; this.tentacleSegments = 4; this.pushedTimer = 0; this.pushForceX = 0; this.pushForceY = 0; this.tentaclePhases = []; for(let i=0; i<this.tentacleCount; i++) { this.tentaclePhases.push({ lenFactor: 0.8 + Math.random()*0.4, swayFactor: (Math.random()-0.5) * 20, curveFactor1: (Math.random()-0.5) * 10, curveFactor2: (Math.random()-0.5) * 10, }); } this.innerGlowHue = 180 + Math.random()*60; } update(dt) { if (this.pushedTimer > 0) { this.x += this.pushForceX * dt; this.y += this.pushForceY * dt; this.pushForceX *= (1-4.8*dt); this.pushForceY *= (1-4.8*dt); this.pushedTimer-=dt; } else { this.x += this.speedX*dt; this.y += this.speedY*dt; } this.bobOffset += this.bobSpeed*dt; if (this.x + this.radius < -50 || this.x - this.radius > TARGET_CANVAS_WIDTH + 50 || this.y - this.radius > TARGET_CANVAS_HEIGHT + 100 || (this.y + this.radius < -100 && this.speedY <0)) { this.x = Math.random() * TARGET_CANVAS_WIDTH; this.y = (Math.random() < 0.5 ? -this.radius*2 - Math.random()*50 : TARGET_CANVAS_HEIGHT + this.radius*2 + Math.random()*50); this.speedY = (this.y < 0 ? 1 : -1) * ((0.15 + Math.random() * 0.25) * FPS); this.speedX = (Math.random() - 0.5) * (0.4 * FPS); } if ((this.x - this.radius < 0 && (this.speedX < 0 || this.pushForceX < 0)) || (this.x + this.radius > TARGET_CANVAS_WIDTH && (this.speedX > 0 || this.pushForceX >0))) { this.speedX *= -0.8; this.pushForceX *= -0.5; this.x = Math.max(this.radius, Math.min(this.x, TARGET_CANVAS_WIDTH - this.radius)); } } draw(ctx) { const drawY = this.y + Math.sin(this.bobOffset * 1.5) * 4; const bellRadius = this.radius; const bellHeight = this.radius * 0.8; ctx.lineWidth = 2; for(let i=0; i < this.tentacleCount; i++) { ctx.beginPath(); let startX = this.x + Math.cos( (i / this.tentacleCount) * Math.PI*2 + this.bobOffset*0.3) * bellRadius * 0.6; let startY = drawY + bellHeight * 0.3 + Math.sin( (i / this.tentacleCount) * Math.PI*2 + this.bobOffset*0.3) * bellRadius * 0.1; ctx.moveTo(startX, startY); let prevX = startX; let prevY = startY; let tPhase = this.tentaclePhases[i]; let tLength = this.tentacleLengthBase * tPhase.lenFactor * (0.9 + Math.sin(this.bobOffset * 2 + i*0.7)*0.1); for (let j = 1; j <= this.tentacleSegments; j++) { let segmentRatio = j / this.tentacleSegments; let controlX = prevX + Math.sin(this.bobOffset * 0.8 + i + j*0.5) * tPhase.curveFactor1 * 0.5; let controlY = prevY + tLength / this.tentacleSegments * 0.5 + Math.cos(this.bobOffset + i + j*0.6) * tPhase.curveFactor2 * 0.5; let endX = startX + Math.sin(this.bobOffset * 0.5 + i * 0.8 + segmentRatio * Math.PI) * tPhase.swayFactor * segmentRatio; let endY = startY + tLength * segmentRatio + Math.cos(this.bobOffset * 1.1 + i*0.5 + segmentRatio * 0.7) * 5; ctx.quadraticCurveTo(controlX, controlY, endX, endY); prevX = endX; prevY = endY; } ctx.strokeStyle = `hsla(${200 + Math.sin(this.bobOffset + i*0.4)*30}, 60%, 70%, 0.5)`; ctx.stroke(); } ctx.beginPath(); ctx.ellipse(this.x, drawY, bellRadius, bellHeight, 0, Math.PI, Math.PI*2, false); ctx.ellipse(this.x, drawY, bellRadius * 0.95, bellHeight * 0.7, 0, 0, Math.PI, false); ctx.closePath(); const grad = ctx.createRadialGradient(this.x, drawY - bellHeight*0.2, bellRadius*0.1, this.x, drawY, bellRadius); grad.addColorStop(0, this.colorLight); grad.addColorStop(1, this.colorDark); ctx.fillStyle = grad; ctx.fill(); ctx.fillStyle = `hsla(${this.innerGlowHue + Math.sin(this.bobOffset*0.7)*10}, 80%, 85%, 0.3)`; ctx.beginPath(); ctx.ellipse(this.x, drawY - bellHeight * 0.1, bellRadius * 0.5, bellHeight * 0.4, 0, 0, Math.PI * 2); ctx.fill(); } }
         class StrongCurrent { constructor(y, height, strength) { this.x = 0; this.y = y; this.width = TARGET_CANVAS_WIDTH; this.height = height; this.strength = strength; this.particles = []; for (let i = 0; i < 30; i++) { this.particles.push({ x: Math.random() * this.width, y: this.y + Math.random() * this.height, size: Math.random() * 2 + 1, alpha: Math.random() * 0.3 + 0.1 }); } } update(dt) { this.particles.forEach(p => { p.x += this.strength * 1.5 * dt; if (this.strength > 0 && p.x > this.width) p.x = 0; else if (this.strength < 0 && p.x < 0) p.x = this.width; }); } draw(ctx) { ctx.fillStyle = `rgba(100, 150, 255, 0.08)`; ctx.fillRect(this.x, this.y, this.width, this.height); this.particles.forEach(p => { ctx.fillStyle = `rgba(200, 220, 255, ${p.alpha})`; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); }); } }
@@ -250,7 +248,6 @@
         function playBouncyVentSound(){ createOscillatorSound(150, 0.35, 'sine', 0, BASE_SFX_VOL * 1.1, 0.05, 0.25); createOscillatorSound(600, 0.2, 'triangle', 0.05, BASE_SFX_VOL * 0.6, 0.02, 0.15); emitParticles(player.x,player.y-player.radius,'geyser_burst');}
         function playLifeLostSound(){ createOscillatorSound(70, 0.5, 'sine', 0, BASE_SFX_VOL * 1.4, 0.05, 0.4); createOscillatorSound(90, 0.4, 'square', 0.1, BASE_SFX_VOL * 0.8, 0.05, 0.3);}
         function playLevelCompleteSound(){ createOscillatorSound(330, 0.25, 'sine', 0, BASE_SFX_VOL * 0.8, 0.03, 0.2); createOscillatorSound(440, 0.25, 'sine', 0.15, BASE_SFX_VOL * 0.8, 0.03, 0.2); createOscillatorSound(523.25, 0.25, 'sine', 0.3, BASE_SFX_VOL * 0.8, 0.03, 0.2);}
-        function playSuckingFunnelSound() { if (isMuted || !audioContext || !audioUnlocked || audioContext.state !== 'running') return; const now = audioContext.currentTime; const duration = 1.2; const noiseSource = audioContext.createBufferSource(); const bufferSize = audioContext.sampleRate * duration; const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate); const data = buffer.getChannelData(0); for (let i = 0; i < bufferSize; i++) { data[i] = Math.random() * 2 - 1; } noiseSource.buffer = buffer; noiseSource.loop = false; const filter = audioContext.createBiquadFilter(); filter.type = 'bandpass'; filter.frequency.setValueAtTime(1000, now); filter.frequency.exponentialRampToValueAtTime(150, now + duration); filter.Q.value = 2; const gain = audioContext.createGain(); gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(BASE_SFX_VOL, now + 0.1); gain.gain.linearRampToValueAtTime(0, now + duration); noiseSource.connect(filter); filter.connect(gain); gain.connect(audioContext.destination); noiseSource.start(now); noiseSource.stop(now + duration); }
         function playGameOverSound(){ createOscillatorSound(150, 0.6, 'sine', 0, BASE_SFX_VOL * 1.1, 0.1, 0.45); createOscillatorSound(75, 0.7, 'sine', 0.2, BASE_SFX_VOL, 0.1, 0.55);}
         function playPowerUpSound(type){ let baseFreq = 300, secondFreq = 400, waveform = 'triangle', dur = 0.25, vol = BASE_SFX_VOL * 0.8; if(type==='extra_life') { baseFreq=500; secondFreq=650; waveform='sine'; dur=0.35; vol=BASE_SFX_VOL;} else if (type === 'sonar_pulse') { baseFreq=200; secondFreq=100; waveform='sine'; dur=0.4; vol=BASE_SFX_VOL * 1.1;} createOscillatorSound(baseFreq, dur, waveform, 0, vol, 0.02, dur*0.8); if (type !== 'sonar_pulse') createOscillatorSound(secondFreq, dur, waveform, 0.05, vol*0.7, 0.02, dur*0.8); } 
         function playGameWonSound(){ createOscillatorSound(392, 0.3, 'sine', 0, BASE_SFX_VOL, 0.05, 0.25); createOscillatorSound(523.25, 0.3, 'sine', 0.15, BASE_SFX_VOL, 0.05, 0.25); createOscillatorSound(659.25, 0.35, 'sine', 0.3, BASE_SFX_VOL, 0.05, 0.3); }
@@ -296,10 +293,7 @@
                 totalAirHighScore=parseInt(localStorage.getItem('abyssalAscentTotalAir_v22')||'0',10);
             }
             initLevel(isFullReset);
-            gameState='playing'; 
-            if (!spawnAnimation.active) playerCanMove = true;
-            else playerCanMove = false;
-            
+            gameState='playing'; playerCanMove=true;
             transitionAlpha=0; transitionCallback=null;
             gameEffectParticles=[];
             attemptPlayMusicAndUnlockAudio();
@@ -325,32 +319,6 @@
             generatePlatformsAndEnemies();
             generateCollectiblesAndPowerups();
 
-            if (internalLevel > 1 && !isFullReset) {
-                spawnAnimation.active = true;
-                spawnAnimation.timer = 1.8;
-                player.x = TARGET_CANVAS_WIDTH / 2;
-                player.y = TARGET_CANVAS_HEIGHT + player.radius; // Start offscreen
-                player.vx = 0;
-                player.vy = 0;
-                player.scale = 0.1;
-                playerCanMove = false;
-
-                const funnelWidth = TARGET_CANVAS_WIDTH * 0.2;
-                const funnelHeight = 70;
-                const coneHeight = funnelHeight * (1 - 0.4); // 0.4 is pipeHeightRatio
-                const funnelY = TARGET_CANVAS_HEIGHT - coneHeight;
-                const funnelX = TARGET_CANVAS_WIDTH / 2 - funnelWidth / 2;
-                emitSpawnBubbles(10, funnelX, funnelY, funnelWidth, funnelHeight);
-            } else {
-                spawnAnimation.active = false;
-                player.x = platforms[0].x + platforms[0].width / 2;
-                player.y = platforms[0].y + platforms[0].height + player.radius + 40;
-                player.vx = 0;
-                player.vy = 0;
-                player.isAttached = false;
-                player.attachedPlatform = null;
-            }
-
             checkAllOrbsCollected();
         }
 
@@ -364,6 +332,7 @@
             const startCeilingH=20;const startCeilingTopY=TARGET_CANVAS_HEIGHT-150;
             platforms.push({x:TARGET_CANVAS_WIDTH/2-70,y:startCeilingTopY,width:140,height:startCeilingH,visualTheme: 'rock_formation', color1:'hsl(210, 10%, 35%)',color2:'hsl(210, 10%, 25%)',static:false,type:'start_ceiling',active:true,direction:1,speed:platformBaseSpeed*0.6});
             generatePlatformVisualDetails(platforms[0]);
+            player.x=platforms[0].x+platforms[0].width/2;player.y=platforms[0].y+platforms[0].height+player.radius+40;player.vx=0;player.vy=0;player.isAttached=false;player.attachedPlatform=null;
             
             let currentCeilingUndersideY=platforms[0].y+platforms[0].height;
             const highestPossibleCeilingTopY=TOP_SURFACE_DEATH_Y+player.radius+EXIT_CEILING_HEIGHT+20;
@@ -482,10 +451,8 @@
                         const cbString = transitionCallback ? transitionCallback.toString() : "";
                         if (cbString.includes("gameState='gameOver'")) gameState = 'gameOver';
                         else if (cbString.includes("gameState='gameWon'")) gameState = 'gameWon';
-                        else {
-                            gameState = 'playing';
-                            playerCanMove = !spawnAnimation.active;
-                        }
+                        else gameState = 'playing';
+                        playerCanMove = (gameState === 'playing');
                         updateUIVisibility();
                     }
                     break;
@@ -502,9 +469,6 @@
         }
         
         function updateAllGameObjects(dt) {
-            if (spawnAnimation.active) {
-                updateSpawnAnimation(dt);
-            }
             updatePlayer(dt);
             updatePlatforms(dt);
             updateEnemies(dt);
@@ -516,33 +480,6 @@
             checkExitPlatform();
         }
         
-        function updateSpawnAnimation(dt) {
-            if (!spawnAnimation.active) return;
-        
-            spawnAnimation.timer -= dt;
-        
-            if (player.scale < 1) {
-                player.scale += 2 * dt;
-                if (player.scale > 1) player.scale = 1;
-            }
-        
-            const coneHeight = 70 * (1 - 0.4); // height * (1 - pipeHeightRatio)
-            const funnelY = TARGET_CANVAS_HEIGHT - coneHeight;
-            const targetY = funnelY - player.radius;
-        
-            if (player.y > targetY) {
-                player.y -= 250 * dt;
-                if (player.y < targetY) player.y = targetY;
-            }
-        
-            if (spawnAnimation.timer <= 0) {
-                spawnAnimation.active = false;
-                playerCanMove = true;
-                player.vy = 200; // Give a little pop out of the funnel
-                player.scale = 1;
-            }
-        }
-
         function updatePlayer(dt) {
             if (!playerCanMove) { player.vx = 0; return; }
             if(player.inkedTimer > 0) player.inkedTimer -= dt;
@@ -564,7 +501,7 @@
                 } else {
                     let canQuickPush = false; let quickPushTargetPlatform = null;
                     for (const plat of platforms.concat(exitPlatform ? [exitPlatform] : [])) {
-                        if (!plat || !plat.active || plat.deadly || plat.type === 'ocean_floor' || plat.type === 'ascent_funnel') continue;
+                        if (!plat || !plat.active || plat.deadly || plat.type === 'ocean_floor') continue;
                         if (player.x + player.radius * 0.6 > plat.x && player.x - player.radius * 0.6 < plat.x + plat.width) { if (player.y - player.radius < plat.y + plat.height + 5 && player.y - player.radius > plat.y + plat.height - 35 && player.vy <= 30) { canQuickPush = true; quickPushTargetPlatform = plat; break; } }
                     }
                     if (canQuickPush) {
@@ -589,11 +526,9 @@
                                 player.vy -= PLATFORM_ATTACH_PULL_UP * dt;
                             }
                             if (player.y - player.radius <= platform.y + platform.height + 2 && (player.y - player.radius - (player.vy*dt)) > platform.y + platform.height - 2) {
-                                player.y = platform.y + platform.height + player.radius; player.vy = 0; player.isAttached = true; player.attachedPlatform = platform; 
-                                if (platform.type !== 'ascent_funnel') playAttachToCeilingSound();
-
+                                player.y = platform.y + platform.height + player.radius; player.vy = 0; player.isAttached = true; player.attachedPlatform = platform; playAttachToCeilingSound();
                                 if (platform.type === 'bouncy_vent') { player.vy = player.currentPushForce * 1.7; player.isAttached = false; player.attachedPlatform = null; playBouncyVentSound(); } 
-                                else if (platform.type === 'ascent_funnel') { checkExitPlatform(); }
+                                else if (platform.type === 'exit_portal_ceiling') { checkExitPlatform(); }
                                 break;
                             }
                         }
@@ -604,10 +539,10 @@
             for (const current of strongCurrents) { if (player.y + player.radius > current.y && player.y - player.radius < current.y + current.height) { player.x += current.strength * dt; } }
             if (player.x < player.radius) { player.x = player.radius; player.vx *= -0.3; }
             if (player.x > TARGET_CANVAS_WIDTH - player.radius) { player.x = TARGET_CANVAS_WIDTH - player.radius; player.vx *= -0.3; }
-            if (player.y - player.radius < TOP_SURFACE_DEATH_Y && !exitPlatform && !player.invincible && player.canTakeDamage) { playerDie("surfaced_abyss"); }
+            if (player.y - player.radius < TOP_SURFACE_DEATH_Y && !player.invincible && player.canTakeDamage) { playerDie("surfaced_abyss"); }
             const deadlyFloor = platforms.find(p => p.type === 'ocean_floor');
             if (internalLevel === 1 && deadlyFloor && player.y + player.radius > deadlyFloor.y) { player.y = deadlyFloor.y - player.radius; if (player.vy > 0) { player.vy = 0; } } 
-            else if (player.y + player.radius > TARGET_CANVAS_HEIGHT) { if (!spawnAnimation.active) { player.y = TARGET_CANVAS_HEIGHT - player.radius; if (player.vy > 0) { player.vy = 0;} } }
+            else if (player.y + player.radius > TARGET_CANVAS_HEIGHT) { player.y = TARGET_CANVAS_HEIGHT - player.radius; if (player.vy > 0) { player.vy = 0;} }
             
             if (player.isAttached && player.attachedPlatform) {
                 const p = player.attachedPlatform;
@@ -615,7 +550,7 @@
                 else {
                     let stillHorizontallyOn = (player.x + player.radius * 0.7 > p.x && player.x - player.radius * 0.7 < p.x + p.width);
                     if (p.type === 'conveyor_current') { player.x += p.direction * p.speed * 1.7 * dt; if ((p.direction > 0 && player.x + player.radius * 0.3 >= p.x + p.width ) || (p.direction < 0 && player.x - player.radius * 0.3 <= p.x )) { player.isAttached = false; player.vx += p.direction * p.speed * 1.0; stillHorizontallyOn = false; } } 
-                    else if (!p.static && p.type !== 'ascent_funnel') { player.x += p.direction * p.speed * dt; }
+                    else if (!p.static) { player.x += p.direction * p.speed * dt; }
                     if (player.isAttached && stillHorizontallyOn) { player.y = p.y + p.height + player.radius; } 
                     else if (player.isAttached) { player.isAttached = false; }
                     if (p.hasLurker) { if (player.isAttached && player.attachedPlatform === p) { if (p.lurkerState === 'idle' || p.lurkerState === 'warning') { p.lurkerChargeTime += dt; if (p.lurkerState === 'idle' && p.lurkerChargeTime > p.lurkerMaxCharge * 0.5) { p.lurkerState = 'warning'; playLurkerWarningSound(); } if (p.lurkerState === 'warning' && p.lurkerChargeTime >= p.lurkerMaxCharge) { p.lurkerState = 'firing'; p.lurkerFireTimer = p.lurkerFireTime; p.lurkerInkCloudRadius = 0; playLurkerChargeSound(); } } } else { if (p.lurkerState === 'warning' || p.lurkerState === 'firing') { p.lurkerState = 'cooldown'; p.lurkerCooldownTimer = p.lurkerCooldownTime; p.lurkerChargeTime = 0; p.lurkerFireTimer = 0; p.lurkerInkCloudRadius = 0;} } }
@@ -637,30 +572,50 @@
                 if (player.sonarPulseTimer <= 0 || player.sonarPulseCount <= 0) { player.sonarPulseActive = false; player.sonarPulseRadius = 0; }
             }
 
-            for (let i = stars.length - 1; i >= 0; i--) { const gem = stars[i]; if (!gem.collected) { const dx = player.x - gem.x; const dy = player.y - (gem.y + Math.sin(gem.bobOffset+totalTimeElapsed*gem.bobSpeed)*3); if (Math.sqrt(dx * dx + dy * dy) < player.radius * player.scale + gem.radius) { gem.collected = true; airCollected += 20; player.radius = Math.min(player.maxRadius, player.radius + player.radiusGrowthPerStar); playGemSound(); checkAllOrbsCollected(); } } }
-            for (let i = powerUps.length - 1; i >= 0; i--) { const pu = powerUps[i]; if (!pu.collected) { const puDrawY = pu.y + Math.sin(pu.animationTimer) * 6; const dx = player.x - pu.x; const dy = player.y - puDrawY; if (Math.sqrt(dx * dx + dy * dy) < player.radius * player.scale + pu.radius) { pu.collected = true; playPowerUpSound(pu.type); if (pu.type === 'shield_bubble') { player.invincible = true; player.invincibleTimer = 5.0; } else if (pu.type === 'propulsion_boost') { player.speedBoost = true; player.speedBoostTimer = 5.0; } else if (pu.type === 'extra_life') { player.lives++; } else if (pu.type === 'sonar_pulse') { player.sonarPulseActive = true; player.sonarPulseTimer = 3.0; player.sonarPulseRadius = player.radius + 10; player.sonarPulseCount = 3; } powerUps.splice(i, 1); } } }
+            for (let i = stars.length - 1; i >= 0; i--) { const gem = stars[i]; if (!gem.collected) { const dx = player.x - gem.x; const dy = player.y - (gem.y + Math.sin(gem.bobOffset+totalTimeElapsed*gem.bobSpeed)*3); if (Math.sqrt(dx * dx + dy * dy) < player.radius + gem.radius) { gem.collected = true; airCollected += 20; player.radius = Math.min(player.maxRadius, player.radius + player.radiusGrowthPerStar); playGemSound(); checkAllOrbsCollected(); } } }
+            for (let i = powerUps.length - 1; i >= 0; i--) { const pu = powerUps[i]; if (!pu.collected) { const puDrawY = pu.y + Math.sin(pu.animationTimer) * 6; const dx = player.x - pu.x; const dy = player.y - puDrawY; if (Math.sqrt(dx * dx + dy * dy) < player.radius + pu.radius) { pu.collected = true; playPowerUpSound(pu.type); if (pu.type === 'shield_bubble') { player.invincible = true; player.invincibleTimer = 5.0; } else if (pu.type === 'propulsion_boost') { player.speedBoost = true; player.speedBoostTimer = 5.0; } else if (pu.type === 'extra_life') { player.lives++; } else if (pu.type === 'sonar_pulse') { player.sonarPulseActive = true; player.sonarPulseTimer = 3.0; player.sonarPulseRadius = player.radius + 10; player.sonarPulseCount = 3; } powerUps.splice(i, 1); } } }
             for (const enemy of enemies) {
-                if (enemy.type === 'jellyfish') { const enemyDrawY = enemy.y + Math.sin(enemy.bobOffset * 1.5) * 4; const dx = player.x - enemy.x; const dy = player.y - enemyDrawY; const dist = Math.sqrt(dx*dx + dy*dy); if (dist < player.radius * player.scale + enemy.radius * 0.8 && enemy.pushedTimer <=0) { if (!player.invincible && player.canTakeDamage) { playJellyfishBounceSound(); const bounceStrength = 420; player.vx = (dx / dist) * bounceStrength * 0.8; player.vy = (dy / dist) * bounceStrength * 1.2; if(player.isAttached) { player.isAttached = false; player.attachedPlatform = null;} const jellyNudgeStrength = 120; enemy.pushForceX = -(dx / dist) * jellyNudgeStrength; enemy.pushForceY = -(dy / dist) * jellyNudgeStrength; enemy.pushedTimer = 0.2; } } } 
-                else if (enemy.type === 'angler'){ const dx = player.x - enemy.x; const dy = player.y - enemy.y; if (Math.sqrt(dx * dx + dy * dy) < player.radius * player.scale + enemy.size * 0.7 && !player.invincible && player.canTakeDamage) { playerDie("hit_enemy"); player.vy = (BUOYANCY > 0 ? 1.5 : -1.5) * 120; player.vx = (dx > 0 ? 4 : -4) * 60; } }
+                if (enemy.type === 'jellyfish') { const enemyDrawY = enemy.y + Math.sin(enemy.bobOffset * 1.5) * 4; const dx = player.x - enemy.x; const dy = player.y - enemyDrawY; const dist = Math.sqrt(dx*dx + dy*dy); if (dist < player.radius + enemy.radius * 0.8 && enemy.pushedTimer <=0) { if (!player.invincible && player.canTakeDamage) { playJellyfishBounceSound(); const bounceStrength = 420; player.vx = (dx / dist) * bounceStrength * 0.8; player.vy = (dy / dist) * bounceStrength * 1.2; if(player.isAttached) { player.isAttached = false; player.attachedPlatform = null;} const jellyNudgeStrength = 120; enemy.pushForceX = -(dx / dist) * jellyNudgeStrength; enemy.pushForceY = -(dy / dist) * jellyNudgeStrength; enemy.pushedTimer = 0.2; } } } 
+                else if (enemy.type === 'angler'){ const dx = player.x - enemy.x; const dy = player.y - enemy.y; if (Math.sqrt(dx * dx + dy * dy) < player.radius + enemy.size * 0.7 && !player.invincible && player.canTakeDamage) { playerDie("hit_enemy"); player.vy = (BUOYANCY > 0 ? 1.5 : -1.5) * 120; player.vx = (dx > 0 ? 4 : -4) * 60; } }
             }
         }
-        function updatePlatforms(dt){ for(let i=platforms.length-1; i>=0; i--){ const p=platforms[i]; if(!p.static&&!p.deadly&&p.type!=='ocean_floor'&&p.type!=='ascent_funnel'){ let oldDirection=p.direction;p.x+=p.direction*p.speed*dt;if(p.x<=0||p.x+p.width>=TARGET_CANVAS_WIDTH){p.direction*=-1;p.x=Math.max(0,Math.min(p.x,TARGET_CANVAS_WIDTH-p.width));if(oldDirection!==p.direction){for(const enemy of enemies){if(enemy.platformAttached===p && enemy.type==='angler')enemy.direction=p.direction;}}}} if(p.type==='disappearing_coral'&&p.active){ if(player.isAttached&&player.attachedPlatform===p){p.timer-=dt;}if(p.timer<=0){p.active=false;if(player.isAttached&&player.attachedPlatform===p){player.isAttached=false;player.attachedPlatform=null; player.vy = 0;}setTimeout(()=>{p.active=true;p.originalColor1&&(p.color1=p.originalColor1);p.timer=1.33;},p.reappearTime * 1000);}} if (p.type === 'retracting_coral' && p.isRetracted) { p.retractTimer-=dt; p.retractedPercent = 1 - (p.retractTimer / p.maxRetractTime); p.retractedPercent = Math.max(0, Math.min(1, p.retractedPercent)); if (p.retractTimer <= 0) { p.isRetracted = false; p.active = true; p.retractedPercent = 0; } } if (p.hasLurker) { if (p.lurkerState === 'firing') { p.lurkerFireTimer-=dt; p.lurkerInkCloudRadius += p.lurkerMaxInkCloudRadius / p.lurkerFireTime * dt; if (Math.floor(totalTimeElapsed*20) % 3 === 0) { emitParticles(p.x + p.width/2, p.y + p.height + 5, 'lurker_ink_cloud'); } if (p.lurkerFireTimer <= 0) { if (player.isAttached && player.attachedPlatform === p && !player.invincible && player.canTakeDamage) { const distToPlayer = Math.sqrt(Math.pow(player.x - (p.x + p.width/2), 2) + Math.pow(player.y - (p.y + p.height), 2)); if (distToPlayer < p.lurkerInkCloudRadius) { player.inkedTimer = 3.0; playerDie("lurker_bite"); player.vy = (BUOYANCY > 0 ? 1.0 : -1.0) * 72; } } p.lurkerState = 'cooldown'; p.lurkerCooldownTimer = p.lurkerCooldownTime; p.lurkerChargeTime = 0; p.lurkerInkCloudRadius = 0; } } else if (p.lurkerState === 'cooldown') { p.lurkerCooldownTimer-=dt; if (p.lurkerCooldownTimer <= 0) { p.lurkerState = 'idle'; } } else if (p.lurkerState === 'warning' || p.lurkerState === 'idle') { if (player.attachedPlatform !== p || !player.isAttached) { if(p.lurkerState !== 'idle') { p.lurkerState = 'cooldown'; p.lurkerCooldownTimer = p.lurkerCooldownTime / 2; p.lurkerChargeTime = 0; p.lurkerFireTimer = 0; p.lurkerInkCloudRadius = 0; } } } } } }
+        function updatePlatforms(dt){ for(let i=platforms.length-1; i>=0; i--){ const p=platforms[i]; if(!p.static&&!p.deadly&&p.type!=='ocean_floor'){ let oldDirection=p.direction;p.x+=p.direction*p.speed*dt;if(p.x<=0||p.x+p.width>=TARGET_CANVAS_WIDTH){p.direction*=-1;p.x=Math.max(0,Math.min(p.x,TARGET_CANVAS_WIDTH-p.width));if(oldDirection!==p.direction){for(const enemy of enemies){if(enemy.platformAttached===p && enemy.type==='angler')enemy.direction=p.direction;}}}} if(p.type==='disappearing_coral'&&p.active){ if(player.isAttached&&player.attachedPlatform===p){p.timer-=dt;}if(p.timer<=0){p.active=false;if(player.isAttached&&player.attachedPlatform===p){player.isAttached=false;player.attachedPlatform=null; player.vy = 0; /* FIX: Stop shooting player up */}setTimeout(()=>{p.active=true;p.originalColor1&&(p.color1=p.originalColor1);p.timer=1.33;},p.reappearTime * 1000);}} if (p.type === 'retracting_coral' && p.isRetracted) { p.retractTimer-=dt; p.retractedPercent = 1 - (p.retractTimer / p.maxRetractTime); p.retractedPercent = Math.max(0, Math.min(1, p.retractedPercent)); if (p.retractTimer <= 0) { p.isRetracted = false; p.active = true; p.retractedPercent = 0; } } if (p.hasLurker) { if (p.lurkerState === 'firing') { p.lurkerFireTimer-=dt; p.lurkerInkCloudRadius += p.lurkerMaxInkCloudRadius / p.lurkerFireTime * dt; if (Math.floor(totalTimeElapsed*20) % 3 === 0) { emitParticles(p.x + p.width/2, p.y + p.height + 5, 'lurker_ink_cloud'); } if (p.lurkerFireTimer <= 0) { if (player.isAttached && player.attachedPlatform === p && !player.invincible && player.canTakeDamage) { const distToPlayer = Math.sqrt(Math.pow(player.x - (p.x + p.width/2), 2) + Math.pow(player.y - (p.y + p.height), 2)); if (distToPlayer < p.lurkerInkCloudRadius) { player.inkedTimer = 3.0; playerDie("lurker_bite"); player.vy = (BUOYANCY > 0 ? 1.0 : -1.0) * 72; } } p.lurkerState = 'cooldown'; p.lurkerCooldownTimer = p.lurkerCooldownTime; p.lurkerChargeTime = 0; p.lurkerInkCloudRadius = 0; } } else if (p.lurkerState === 'cooldown') { p.lurkerCooldownTimer-=dt; if (p.lurkerCooldownTimer <= 0) { p.lurkerState = 'idle'; } } else if (p.lurkerState === 'warning' || p.lurkerState === 'idle') { if (player.attachedPlatform !== p || !player.isAttached) { if(p.lurkerState !== 'idle') { p.lurkerState = 'cooldown'; p.lurkerCooldownTimer = p.lurkerCooldownTime / 2; p.lurkerChargeTime = 0; p.lurkerFireTimer = 0; p.lurkerInkCloudRadius = 0; } } } } } }
         function updateEnemies(dt){ for(let i = enemies.length - 1; i >= 0; i--) { const enemy = enemies[i]; if (enemy.type === 'angler') { if(!enemy.platformAttached||!enemy.platformAttached.active){enemy.speed*=(1-3*dt); enemy.y += BUOYANCY*0.5*dt; if(enemy.y < -enemy.size*2) enemies.splice(i,1); continue;} const pa=enemy.platformAttached;enemy.x+=enemy.direction*enemy.speed*dt;const patrolMargin=5;if(enemy.x-enemy.size<pa.x+patrolMargin||enemy.x+enemy.size>pa.x+pa.width-patrolMargin){enemy.direction*=-1;enemy.x=Math.max(pa.x+patrolMargin+enemy.size,Math.min(enemy.x,pa.x+pa.width-patrolMargin-enemy.size));}enemy.y=pa.y+pa.height+enemy.size+5; enemy.angle -= 0.48 * dt * enemy.direction; } else if (enemy.type === 'jellyfish') { enemy.update(dt); } if (enemy.pushedBySonarTimer && enemy.pushedBySonarTimer > 0) { enemy.x += enemy.speedX*dt; enemy.y += enemy.speedY*dt; enemy.speedX *= (1-6*dt); enemy.speedY *= (1-6*dt); enemy.pushedBySonarTimer-=dt; } } }
         function updateStars(dt){ stars.forEach(star=>{if(!star.collected){star.bobOffset+=star.bobSpeed*dt;}})}
         function updatePowerUps(dt){ powerUps.forEach(pu => { if(!pu.collected) pu.update(dt);})} 
         function updateGameEffectParticles(dt){ for(let i=gameEffectParticles.length-1;i>=0;i--){gameEffectParticles[i].update(dt);if(gameEffectParticles[i].lifetime<=0||gameEffectParticles[i].size<=0.1){gameEffectParticles.splice(i,1);}}}
         function updateAmbientBubbles(dt){ for(const b of ambientBubbles){ b.update(dt); } for(const b of foregroundBubbles){ b.update(dt); } }
         
-        function playerDie(reason="unknown"){ if(player.invincible && !reason.includes("surfaced") && reason !== "fell_off_bottom") return; if(!player.canTakeDamage && !player.invincible && !reason.includes("surfaced") && reason !== "fell_off_bottom") return; player.lives--; playLifeLostSound(); if (reason === "lurker_bite") { playLurkerImpactSound(); } if(player.lives<=0){ gameOverFinalAir=airCollected; if(airCollected>totalAirHighScore){totalAirHighScore=airCollected;localStorage.setItem('abyssalAscentTotalAir_v22',totalAirHighScore);} playerCanMove=false; gameState='transitioning'; transitionCallback=()=>{gameState='gameOver';playGameOverSound();updateUIVisibility();}; }else{ playerCanMove=false; gameState='transitioning'; transitionCallback=()=>{ if(platforms.length>0&&platforms[0].type==='start_ceiling'){ player.x=platforms[0].x+platforms[0].width/2; player.y=platforms[0].y+platforms[0].height+player.radius+40; player.isAttached=false;player.attachedPlatform=null; }else{ player.x=TARGET_CANVAS_WIDTH/2;player.y=TARGET_CANVAS_HEIGHT-100;player.isAttached=false; } player.vx=0;player.vy=0; player.radius=player.baseRadius; player.currentPushForce=PLAYER_BASE_PUSH_FORCE; player.invincible=true;player.invincibleTimer=2.0; player.inkedTimer = 0; player.scale = 1; updateUIVisibility(); }; } }
-        function checkAllOrbsCollected(){ if(stars.every(s=>s.collected)){if(!exitPlatform&&stars.length>0){const funnelWidth = TARGET_CANVAS_WIDTH * 0.25; const funnelHeight = 70; const pipeHeight = funnelHeight * 0.4; exitPlatform={x:TARGET_CANVAS_WIDTH/2-funnelWidth/2,y:TOP_SURFACE_DEATH_Y - pipeHeight,width:funnelWidth,height:funnelHeight,static:true,type:'ascent_funnel',active:true,soundPlayed:false};}}}
-        function checkExitPlatform(){ if(exitPlatform&&player.isAttached&&player.attachedPlatform===exitPlatform){ if(gameState==='playing'){ if(!exitPlatform.soundPlayed){ playSuckingFunnelSound(); exitPlatform.soundPlayed=true; } playerCanMove=false;player.vx*=0.9;const pipeHeightRatio = 0.4; const pipeHeight = exitPlatform.height * pipeHeightRatio; const funnelPipeY = exitPlatform.y + pipeHeight / 2; const funnelPipeX=exitPlatform.x+exitPlatform.width/2;let dx=funnelPipeX-player.x;let dy=funnelPipeY-player.y;player.x+=dx*0.1;player.y+=dy*0.1;player.scale*=0.95;if(player.scale<0.05){airCollected+=100*internalLevel;currentDepth-=DEPTH_DECREASE_PER_LEVEL;if(currentDepth<=0){currentDepth=0;gameState='transitioning';playerCanMove=false;transitionCallback=()=>{gameState='gameWon';playGameWonSound();if(airCollected>totalAirHighScore){totalAirHighScore=airCollected;localStorage.setItem('abyssalAscentTotalAir_v22',totalAirHighScore);}updateUIVisibility();};return;} playLevelCompleteSound();playerCanMove=false;gameState='transitioning';transitionCallback=()=>{internalLevel++;platformBaseSpeed+=0.18;platformBaseSpeed=Math.min(platformBaseSpeed,(0.42*FPS)*2.5);initLevel();updateUIVisibility();};}} } }
+        function playerDie(reason="unknown"){ if(player.invincible && !reason.includes("surfaced") && reason !== "fell_off_bottom") return; if(!player.canTakeDamage && !player.invincible && !reason.includes("surfaced") && reason !== "fell_off_bottom") return; player.lives--; playLifeLostSound(); if (reason === "lurker_bite") { playLurkerImpactSound(); } if(player.lives<=0){ gameOverFinalAir=airCollected; if(airCollected>totalAirHighScore){totalAirHighScore=airCollected;localStorage.setItem('abyssalAscentTotalAir_v22',totalAirHighScore);} playerCanMove=false; gameState='transitioning'; transitionCallback=()=>{gameState='gameOver';playGameOverSound();updateUIVisibility();}; }else{ playerCanMove=false; gameState='transitioning'; transitionCallback=()=>{ if(platforms.length>0&&platforms[0].type==='start_ceiling'){ player.x=platforms[0].x+platforms[0].width/2; player.y=platforms[0].y+platforms[0].height+player.radius+40; player.isAttached=false;player.attachedPlatform=null; }else{ player.x=TARGET_CANVAS_WIDTH/2;player.y=TARGET_CANVAS_HEIGHT-100;player.isAttached=false; } player.vx=0;player.vy=0; player.radius=player.baseRadius; player.currentPushForce=PLAYER_BASE_PUSH_FORCE; player.invincible=true;player.invincibleTimer=2.0; player.inkedTimer = 0; updateUIVisibility(); }; } }
+        function checkAllOrbsCollected(){ if(stars.every(s=>s.collected)){if(!exitPlatform&&stars.length>0){exitPlatform={x:TARGET_CANVAS_WIDTH/2-60,y:EXIT_CEILING_UNDERSIDE_Y-EXIT_CEILING_HEIGHT,width:120,height:EXIT_CEILING_HEIGHT, color1:'hsl(180, 80%, 75%)',color2:'hsl(200, 90%, 60%)', static:true,type:'exit_portal_ceiling',active:true, bobOffset: Math.random() * Math.PI * 2, bobSpeed: 1.8};}}}
+        function checkExitPlatform(){ if(exitPlatform&&player.isAttached&&player.attachedPlatform===exitPlatform){ if(gameState==='playing'){ airCollected+=100*internalLevel;currentDepth-=DEPTH_DECREASE_PER_LEVEL; if(currentDepth<=0){ currentDepth=0;gameState='transitioning';playerCanMove=false; transitionCallback=()=>{gameState='gameWon';playGameWonSound();if(airCollected>totalAirHighScore){totalAirHighScore=airCollected;localStorage.setItem('abyssalAscentTotalAir_v22',totalAirHighScore);}updateUIVisibility();};return; } playLevelCompleteSound();playerCanMove=false;gameState='transitioning'; transitionCallback=()=>{ internalLevel++; platformBaseSpeed += 0.18; platformBaseSpeed = Math.min(platformBaseSpeed, (0.42 * FPS) * 2.5); player.radius=player.baseRadius;player.currentPushForce=PLAYER_BASE_PUSH_FORCE; initLevel();updateUIVisibility(); }; } } }
         
         //================================================================
         // 8. CORE DRAWING LOGIC (Helper functions)
         //================================================================
         function draw(){ if (gameState !== 'paused') { ctx.clearRect(0,0,TARGET_CANVAS_WIDTH,TARGET_CANVAS_HEIGHT); if(gameState==='start'){ drawStartScreen(); } else if(gameState==='playing'||gameState==='levelComplete'||gameState==='transitioning'){ drawGameElements(); } else if(gameState==='gameOver'){ drawGameOverScreen(); } else if(gameState==='gameWon'){ drawGameWonScreen(); } else { ctx.fillStyle='#AA0000';ctx.fillRect(0,0,TARGET_CANVAS_WIDTH,TARGET_CANVAS_HEIGHT); ctx.fillStyle='yellow';ctx.fillRect(20,20,60,60); ctx.fillStyle='white';ctx.font='14px Arial';ctx.fillText(`Unknown GS: ${gameState}`,20,100); } if (foregroundBubbles && foregroundBubbles.length > 0) { for (const b of foregroundBubbles) { if (b && typeof b.draw === 'function') b.draw(ctx); } } if(gameState==='transitioning'){ drawTransitionOverlay(); } } }
         function drawBackground(){ const grad=ctx.createLinearGradient(0,0,0,TARGET_CANVAS_HEIGHT);currentGradientColors.forEach((c,i)=>{grad.addColorStop(i/(currentGradientColors.length-1),c);});ctx.fillStyle=grad;ctx.fillRect(0,0,TARGET_CANVAS_WIDTH,TARGET_CANVAS_HEIGHT);}
-        function drawGameElements(){ drawBackground(); drawBackground_LightColumn(); drawAbyssBackground_WallSilhouettes(); for(const b of ambientBubbles){if(b.isParallax&&b&&typeof b.draw==='function')b.draw(ctx);} strongCurrents.forEach(c => c.draw(ctx)); if (internalLevel === 1) { seaFloorKelps.forEach(kelp => kelp.draw(ctx)); } for(const p of platforms){if(p.active || (p.type === 'retracting_coral' && p.isRetracted) ) drawPlatform(p); if (p.hasLurker && p.lurkerState === 'firing' && p.lurkerInkCloudRadius > 0) { ctx.fillStyle = `rgba(20, 20, 25, ${0.6 * (p.lurkerFireTimer / p.lurkerFireTime)})`; ctx.beginPath(); ctx.arc(p.x + p.width/2, p.y + p.height + 5, p.lurkerInkCloudRadius, 0, Math.PI*2); ctx.fill(); } } if (spawnAnimation.active) { const funnelWidth = TARGET_CANVAS_WIDTH * 0.2; const funnelHeight = 70; const coneHeight = funnelHeight * (1 - 0.4); const funnelY = TARGET_CANVAS_HEIGHT - coneHeight; const funnelX = TARGET_CANVAS_WIDTH / 2 - funnelWidth / 2; drawFunnel(ctx, funnelX, funnelY, funnelWidth, funnelHeight, true); } if(exitPlatform){ drawPlatform(exitPlatform); } if(internalLevel===1 && seaFloorDecorations.length > 0){ for(const decor of seaFloorDecorations){ctx.fillStyle=decor.color;ctx.fillRect(decor.x-decor.w/2,decor.baseY-decor.h,decor.w,decor.h);}} for(const gem of stars){if(!gem.collected)drawGem(gem.x,gem.y+Math.sin(gem.bobOffset+totalTimeElapsed*gem.bobSpeed)*3,gem.radius,gem.scale);} for(const pu of powerUps){if(pu && typeof pu.draw === 'function') pu.draw(ctx);} for(const enemy of enemies){ if (enemy.type === 'angler') drawAnglerFish(enemy); else if (enemy.type === 'jellyfish') enemy.draw(ctx); } let pC1='#70C1FF',pC2='#2A7AB0'; if(player.inkedTimer > 0 && Math.floor(player.inkedTimer*10)%2 === 0) { pC1 = '#303035'; pC2 = '#101015'; } else if(player.speedBoost && Math.floor(player.speedBoostTimer * 10) % 2 === 0) { pC1='hsl(120, 70%, 75%)';pC2='hsl(140, 70%, 55%)'; } else if(player.invincibleTimer>0&&Math.floor(player.invincibleTimer*10)%2===0){ pC1='hsl(50, 100%, 85%)';pC2='hsl(45, 100%, 65%)'; } drawCircleWithGradient(player.x,player.y,player.radius,pC1,pC2,player.scale); if (player.sonarPulseActive && player.sonarPulseRadius > 0) { ctx.strokeStyle = `rgba(200, 150, 255, ${0.6 * (player.sonarPulseTimer / 3.0)})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(player.x, player.y, player.sonarPulseRadius, 0, Math.PI * 2); ctx.stroke(); } if(player.isAttached&&player.attachedPlatform){ ctx.strokeStyle='rgba(220,240,255,0.4)';ctx.lineWidth=player.radius*0.12*player.scale;ctx.beginPath();ctx.moveTo(player.x,player.y-player.radius*player.scale);ctx.lineTo(player.x,player.attachedPlatform.y+player.attachedPlatform.height);ctx.stroke(); } else{ ctx.fillStyle='rgba(220,240,255,0.15)';ctx.beginPath();ctx.arc(player.x-player.radius*0.35*player.scale,player.y-player.radius*0.35*player.scale,player.radius*0.2*player.scale,0,Math.PI*2);ctx.fill();} for(const p of gameEffectParticles){if(p&&typeof p.draw==='function')p.draw(ctx);} for(const b of ambientBubbles){if(!b.isParallax&&b&&typeof b.draw==='function')b.draw(ctx);} const infoTxt=`Air: ${airCollected} | Depth: ${currentDepth}m | Bubbles: ${player.lives}`;ctx.fillStyle='white';ctx.strokeStyle='black';ctx.lineWidth=2.5;ctx.font='bold 17px Arial';ctx.textAlign='left';ctx.strokeText(infoTxt,10,30);ctx.fillText(infoTxt,10,30); }
+        function drawGameElements(){ drawBackground(); drawBackground_LightColumn(); drawAbyssBackground_WallSilhouettes(); for(const b of ambientBubbles){if(b.isParallax&&b&&typeof b.draw==='function')b.draw(ctx);} strongCurrents.forEach(c => c.draw(ctx)); if (internalLevel === 1) { seaFloorKelps.forEach(kelp => kelp.draw(ctx)); } for(const p of platforms){if(p.active || (p.type === 'retracting_coral' && p.isRetracted) ) drawPlatform(p); if (p.hasLurker && p.lurkerState === 'firing' && p.lurkerInkCloudRadius > 0) { ctx.fillStyle = `rgba(20, 20, 25, ${0.6 * (p.lurkerFireTimer / p.lurkerFireTime)})`; ctx.beginPath(); ctx.arc(p.x + p.width/2, p.y + p.height + 5, p.lurkerInkCloudRadius, 0, Math.PI*2); ctx.fill(); } } 
+        if(exitPlatform){ 
+            const bobY = Math.sin(totalTimeElapsed * exitPlatform.bobSpeed + exitPlatform.bobOffset) * 4;
+            drawPlatform(exitPlatform, bobY); 
+            
+            const textX = exitPlatform.x + exitPlatform.width/2;
+            const textY = exitPlatform.y + exitPlatform.height/2 + 5 + bobY;
+
+            const pulse = (Math.sin(totalTimeElapsed * 6) + 1) / 2; // from 0 to 1
+            const textLightness = 85 + pulse * 15; // from 85% to 100%
+            const textColor = `hsl(200, 100%, ${textLightness}%)`;
+
+            ctx.fillStyle = textColor;
+            ctx.strokeStyle='#104010';
+            ctx.lineWidth=2;
+            ctx.font='bold 14px Arial';
+            ctx.textAlign='center'; 
+            ctx.strokeText('ASCENT', textX, textY); 
+            ctx.fillText('ASCENT', textX, textY);
+        }
+        if(internalLevel===1 && seaFloorDecorations.length > 0){ for(const decor of seaFloorDecorations){ctx.fillStyle=decor.color;ctx.fillRect(decor.x-decor.w/2,decor.baseY-decor.h,decor.w,decor.h);}} for(const gem of stars){if(!gem.collected)drawGem(gem.x,gem.y+Math.sin(gem.bobOffset+totalTimeElapsed*gem.bobSpeed)*3,gem.radius,gem.scale);} for(const pu of powerUps){if(pu && typeof pu.draw === 'function') pu.draw(ctx);} for(const enemy of enemies){ if (enemy.type === 'angler') drawAnglerFish(enemy); else if (enemy.type === 'jellyfish') enemy.draw(ctx); } let pC1='#70C1FF',pC2='#2A7AB0'; if(player.inkedTimer > 0 && Math.floor(player.inkedTimer*10)%2 === 0) { pC1 = '#303035'; pC2 = '#101015'; } else if(player.speedBoost && Math.floor(player.speedBoostTimer * 10) % 2 === 0) { pC1='hsl(120, 70%, 75%)';pC2='hsl(140, 70%, 55%)'; } else if(player.invincibleTimer>0&&Math.floor(player.invincibleTimer*10)%2===0){ pC1='hsl(50, 100%, 85%)';pC2='hsl(45, 100%, 65%)'; } drawCircleWithGradient(player.x,player.y,player.radius,pC1,pC2,player.scale); if (player.sonarPulseActive && player.sonarPulseRadius > 0) { ctx.strokeStyle = `rgba(200, 150, 255, ${0.6 * (player.sonarPulseTimer / 3.0)})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(player.x, player.y, player.sonarPulseRadius, 0, Math.PI * 2); ctx.stroke(); } if(player.isAttached&&player.attachedPlatform){ ctx.strokeStyle='rgba(220,240,255,0.4)';ctx.lineWidth=player.radius*0.12;ctx.beginPath();ctx.moveTo(player.x,player.y-player.radius);ctx.lineTo(player.x,player.attachedPlatform.y+player.attachedPlatform.height);ctx.stroke(); } else{ ctx.fillStyle='rgba(220,240,255,0.15)';ctx.beginPath();ctx.arc(player.x-player.radius*0.35,player.y-player.radius*0.35,player.radius*0.2,0,Math.PI*2);ctx.fill();} for(const p of gameEffectParticles){if(p&&typeof p.draw==='function')p.draw(ctx);} for(const b of ambientBubbles){if(!b.isParallax&&b&&typeof b.draw==='function')b.draw(ctx);} const infoTxt=`Air: ${airCollected} | Depth: ${currentDepth}m | Bubbles: ${player.lives}`;ctx.fillStyle='white';ctx.strokeStyle='black';ctx.lineWidth=2.5;ctx.font='bold 17px Arial';ctx.textAlign='left';ctx.strokeText(infoTxt,10,30);ctx.fillText(infoTxt,10,30); }
         function drawStartScreen(){ drawBackground(); drawBackground_LightColumn(); drawAbyssBackground_WallSilhouettes(); for(const b of ambientBubbles){if(b.isParallax&&b&&typeof b.draw==='function')b.draw(ctx);} drawScreenMessage("ABYSSAL ASCENT","Press PUSH to Detach & Ascend",'#A7FFEB','white',30,18); ctx.font='bold 13px Arial';ctx.lineWidth=2;ctx.fillStyle='white';ctx.strokeStyle='black'; ctx.strokeText("Arrow Keys: Move Along Ceiling | SPACE/Button: PUSH Down",TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+55); ctx.fillText("Arrow Keys: Move Along Ceiling | SPACE/Button: PUSH Down",TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+55); ctx.strokeText("Collect Air Bubbles, reach the Surface Exit.",TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+75); ctx.fillText("Collect Air Bubbles, reach the Surface Exit.",TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+75); for(const b of ambientBubbles){if(!b.isParallax&&b&&typeof b.draw==='function')b.draw(ctx);}  }
         function drawGameOverScreen(){ drawBackground(); drawBackground_LightColumn(); drawAbyssBackground_WallSilhouettes(); for(const b of ambientBubbles){if(b.isParallax&&b&&typeof b.draw==='function')b.draw(ctx);} drawScreenMessage("LOST TO THE ABYSS",`Total Air: ${gameOverFinalAir}`,'#FF8A80','white',36,22); ctx.fillStyle='white';ctx.strokeStyle='black';ctx.lineWidth=3;ctx.font='bold 24px Arial';ctx.textAlign='center'; ctx.strokeText(`Best Total Air: ${totalAirHighScore}`,TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+65); ctx.fillText(`Best Total Air: ${totalAirHighScore}`,TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+65); ctx.font='bold 19px Arial';ctx.strokeText('Press PUSH to Try Again',TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+105); ctx.fillText('Press PUSH to Try Again',TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+105); for(const b of ambientBubbles){if(!b.isParallax&&b&&typeof b.draw==='function')b.draw(ctx);}  }
         function drawGameWonScreen(){ drawBackground(); drawBackground_LightColumn(); drawAbyssBackground_WallSilhouettes(); for(const b of ambientBubbles){if(b.isParallax&&b&&typeof b.draw==='function')b.draw(ctx);} drawScreenMessage("SURFACE REACHED!",`Total Air: ${airCollected}`,'#81C784','white',38,24); ctx.fillStyle='white';ctx.strokeStyle='black';ctx.lineWidth=3;ctx.font='bold 24px Arial';ctx.textAlign='center'; ctx.strokeText(`Best Total Air: ${totalAirHighScore}`,TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+65); ctx.fillText(`Best Total Air: ${totalAirHighScore}`,TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+65); ctx.font='bold 19px Arial';ctx.strokeText('Press PUSH to Dive Again!',TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+105); ctx.fillText('Press PUSH to Dive Again!',TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+105); for(const b of ambientBubbles){if(!b.isParallax&&b&&typeof b.draw==='function')b.draw(ctx);}  }
@@ -671,82 +626,101 @@
         //================================================================
         // 9. DRAWING HELPERS & MISC
         //================================================================
-        function emitSpawnBubbles(count, funnelX, funnelY, funnelWidth, funnelHeight) {
-            const funnelMouthY = funnelY;
-            const funnelMouthX = funnelX + funnelWidth / 2;
-            for (let i = 0; i < count; i++) {
-                const bubble = new AmbientBubble(false, 'ambient');
-                bubble.x = funnelMouthX + (Math.random() - 0.5) * funnelWidth * 0.8;
-                bubble.y = funnelMouthY + Math.random() * funnelHeight * 0.5;
-                bubble.speedY = -(120 + Math.random() * 80); // Strong upward push
-                bubble.speedX = (Math.random() - 0.5) * 50;
-                ambientBubbles.push(bubble);
-            }
-        }
-        function drawFunnel(ctx, x, y, width, height, openingUp) {
-            const pipeHeightRatio = 0.4;
-            const pipeWidthRatio = 0.35;
-        
-            const pipeWidth = width * pipeWidthRatio;
-            const pipeHeight = height * pipeHeightRatio;
-            const pipeX = x + (width - pipeWidth) / 2;
-        
-            // Dynamically generate colors based on the level's background
-            const midLightness = (numericGradientColors.lT + numericGradientColors.lB) / 2;
-            const midSaturation = (numericGradientColors.sT + numericGradientColors.sB) / 2;
-            const c1 = `hsl(45, ${Math.min(90, midSaturation + 20)}%, ${Math.min(75, midLightness + 25)}%)`;
-            const c2 = `hsl(40, ${Math.min(90, midSaturation + 30)}%, ${Math.min(65, midLightness + 10)}%)`;
-        
-            ctx.save();
-            ctx.strokeStyle = 'rgba(0,0,0,0.5)';
-            ctx.lineWidth = 2;
+        function drawCircleWithGradient(x,y,r,c1,c2,s=1){ ctx.beginPath();const gr=ctx.createRadialGradient(x,y,0,x,y,r*s);gr.addColorStop(0,c1);gr.addColorStop(1,c2);ctx.fillStyle=gr;ctx.arc(x,y,r*s,0,Math.PI*2);ctx.fill();ctx.strokeStyle='rgba(0,0,0,0.4)';ctx.lineWidth=1.5;ctx.stroke();}
+        function drawPlatform(platform, offsetY = 0){
+            let {x,y,width,height, type, visualTheme, visualDetails, retractedPercent = 0} = platform;
+            y += offsetY; // Apply vertical bobbing for drawing
             
-            if (openingUp) { // Spawn funnel -> Wide part up
-                const coneHeight = height * (1 - pipeHeightRatio);
-                const pipeY = y + coneHeight;
-                
-                // Cone part
-                const coneGrad = ctx.createRadialGradient(x + width/2, y, 0, x + width/2, y, width);
-                coneGrad.addColorStop(0, c1);
-                coneGrad.addColorStop(1, c2);
-                ctx.fillStyle = coneGrad;
-                ctx.beginPath();
-                ctx.moveTo(x, y);
-                ctx.lineTo(x + width, y);
-                ctx.lineTo(pipeX + pipeWidth, pipeY);
-                ctx.lineTo(pipeX, pipeY);
-                ctx.closePath();
-                ctx.fill();
-                ctx.stroke();
-        
-                // Pipe part
-                drawPlatformCeiling_Base(pipeX, pipeY, pipeWidth, pipeHeight, c1, c2, 0);
-        
-            } else { // Exit funnel -> Wide part down
-                const coneY = y + pipeHeight;
-                
-                // Pipe part
-                drawPlatformCeiling_Base(pipeX, y, pipeWidth, pipeHeight, c1, c2, 0);
+            ctx.save(); 
+            let effectiveW = width * (1 - retractedPercent * 0.5);
+            let effectiveH = height * (1 - retractedPercent);
+            let effectiveX = x + (width - effectiveW) / 2;
+            if (effectiveH < 1 && type === 'retracting_coral') { ctx.restore(); return; }
+            let cornerRad = PLATFORM_CORNER_RADIUS;
+            let baseC1 = platform.color1, baseC2 = platform.color2;
+            switch(visualTheme) {
+                case 'rock_formation': baseC1 = baseC1 || 'hsl(210, 10%, 35%)'; baseC2 = baseC2 || 'hsl(210, 10%, 25%)'; break;
+                case 'ancient_coral_shelf': baseC1 = baseC1 || 'hsl(10, 50%, 60%)'; baseC2 = baseC2 || 'hsl(5, 60%, 45%)'; cornerRad = PLATFORM_CORNER_RADIUS * 1.5; break;
+                case 'dense_kelp_bed': baseC1 = 'hsl(125, 35%, 25%)'; baseC2 = 'hsl(125, 40%, 18%)'; break; 
+                case 'sunken_driftwood': baseC1 = 'hsl(30, 20%, 35%)'; baseC2 = baseC2 || 'hsl(30, 20%, 22%)'; cornerRad = PLATFORM_CORNER_RADIUS * 0.5; break;
+                case 'rusted_shipwreck_panel': baseC1 = baseC1 || 'hsl(200, 12%, 40%)'; baseC2 = baseC2 || 'hsl(200, 8%, 28%)'; cornerRad = 2; break;
+                case 'industrial_grate': baseC1 = baseC1 || 'hsl(210, 7%, 30%)'; baseC2 = baseC2 || 'hsl(210, 8%, 18%)'; cornerRad = 2; break;
+                default: baseC1 = baseC1 || 'hsl(210, 10%, 35%)'; baseC2 = baseC2 || 'hsl(210, 10%, 25%)';
+            }
+            drawPlatformCeiling_Base(effectiveX,y,effectiveW,effectiveH, baseC1, baseC2, cornerRad);
+            if (visualDetails) {
+                switch(visualTheme) {
+                    case 'rock_formation': if (effectiveH > 5 && visualDetails.cracks) { ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1.5; visualDetails.cracks.forEach(crack => { if (retractedPercent < 0.8) { ctx.beginPath(); ctx.moveTo(effectiveX + crack.x1 * effectiveW, y + crack.y1 * effectiveH); ctx.lineTo(effectiveX + crack.x2 * effectiveW, y + crack.y2 * effectiveH); ctx.stroke(); } }); } break;
+                    case 'ancient_coral_shelf': if (effectiveH > 3 && visualDetails.bumps) { visualDetails.bumps.forEach(bump => { ctx.fillStyle = bump.c; let r = bump.r * (1-retractedPercent*0.8); if (r > 1) { ctx.beginPath(); ctx.arc(effectiveX + bump.x * effectiveW, y + effectiveH - r * bump.yAnchor, r, 0, Math.PI*2); ctx.fill(); } }); } break;
+                    case 'dense_kelp_bed':  if (effectiveH > 10 && visualDetails.kelpStrands) {  ctx.strokeStyle = `hsla(120, 30%, 30%, 0.6)`;  ctx.lineWidth = Math.max(1, 3 * (1-retractedPercent*0.5)); visualDetails.kelpStrands.forEach(strand => { let kxBaseOnOriginal = x + strand.startXOffset * width;  let kxAnimated = kxBaseOnOriginal + Math.sin(totalTimeElapsed * 1.2 + strand.phase) * 3; if (kxAnimated < effectiveX - ctx.lineWidth || kxAnimated > effectiveX + effectiveW + ctx.lineWidth) return;  let kelpLength = strand.baseLength * (1-retractedPercent*0.7); if (kelpLength < 5) return; ctx.beginPath(); ctx.moveTo(kxAnimated, y + effectiveH);  let cp1x = kxAnimated + Math.sin(totalTimeElapsed * 0.8 + strand.phase * 1.2) * 1; let cp1y = y + effectiveH + kelpLength * 0.2; let cp2x = kxAnimated + Math.cos(totalTimeElapsed * 1.0 + strand.phase * 1.5) * 3; let cp2y = y + effectiveH + kelpLength * 0.6; let endX = kxAnimated + Math.sin(totalTimeElapsed * 1.1 + strand.phase * 2) * 4; let endY = y + effectiveH + kelpLength; ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, endX, endY); ctx.stroke(); }); } break;
+                    case 'sunken_driftwood': if (effectiveH > 5 && effectiveW > 10 && visualDetails.grains) { ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1; visualDetails.grains.forEach(grain => { ctx.beginPath(); ctx.moveTo(effectiveX, y + grain.startY * effectiveH); ctx.bezierCurveTo(effectiveX+effectiveW*0.3, y + grain.startY * effectiveH + grain.c1y, effectiveX+effectiveW*0.7, y + grain.startY * effectiveH + grain.c2y, effectiveX+effectiveW, y + grain.startY * effectiveH); ctx.stroke(); }); } break;
+                    case 'rusted_shipwreck_panel': if (effectiveH > 8 && effectiveW > 20 && visualDetails.rivets) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; visualDetails.rivets.forEach(rivet => { let rivetSize = rivet.s * (1-retractedPercent*0.7); if (rivetSize < 0.5) return; ctx.beginPath(); ctx.arc(effectiveX + rivet.x * effectiveW, y + rivet.y * effectiveH, rivetSize,0,Math.PI*2); ctx.fill(); }); } break;
+                    case 'industrial_grate': if (effectiveH > 5 && visualDetails.teeth) { ctx.fillStyle = baseC2; visualDetails.teeth.forEach(tooth => { let currentToothWidth = tooth.w * (1 - retractedPercent * 0.5); let currentToothHeight = tooth.h * (1 - retractedPercent * 0.3); if (currentToothWidth < 2 || currentToothHeight < 2) return; let toothX = effectiveX + tooth.normX * effectiveW - currentToothWidth/2; if (toothX + currentToothWidth > effectiveX + effectiveW) currentToothWidth = (effectiveX + effectiveW) - toothX; if (toothX < effectiveX) {currentToothWidth -= (effectiveX - toothX); toothX = effectiveX;} if (currentToothWidth > 1) { ctx.fillRect(toothX, y + effectiveH, currentToothWidth, currentToothHeight); } }); } break;
+                }
+            }
+            if (effectiveH > 5) {
+                if (type === 'bouncy_vent') { ctx.fillStyle = 'rgba(160, 210, 190, 0.5)'; let ventY = y + effectiveH * 0.5; let ventSize = Math.min(effectiveW, effectiveH) * 0.4 * (1-retractedPercent*0.5); if (ventSize > 1) { ctx.beginPath(); ctx.ellipse(effectiveX + effectiveW/2, ventY, ventSize, ventSize*0.6, 0, 0, Math.PI*2); ctx.fill(); ctx.fillStyle = 'rgba(210,240,225,0.65)'; ctx.beginPath(); ctx.ellipse(effectiveX+effectiveW/2, ventY, ventSize*0.5, ventSize*0.3,0,0,Math.PI*2);ctx.fill(); } }
+                else if (type === 'conveyor_current' && effectiveW > 20) { ctx.fillStyle = 'rgba(190, 170, 60, 0.6)'; let arrowSize = 10 * (1-retractedPercent*0.6); if (arrowSize > 2) { for (let i=0; i < effectiveW/30; i++) { ctx.beginPath(); let ax = effectiveX + 15 + i*30; if(ax > effectiveX + effectiveW - arrowSize - 5) continue; if (platform.direction > 0) { ctx.moveTo(ax - arrowSize, y + effectiveH/2 - arrowSize/2); ctx.lineTo(ax, y + effectiveH/2); ctx.lineTo(ax - arrowSize, y + effectiveH/2 + arrowSize/2); } else { ctx.moveTo(ax + arrowSize, y + effectiveH/2 - arrowSize/2); ctx.lineTo(ax, y + effectiveH/2); ctx.lineTo(ax + arrowSize, y + effectiveH/2 + arrowSize/2); } ctx.fill(); } } } 
+                if (platform.hasLurker) {
+                    const lurkerBaseSize = 15;
+                    let currentLurkerSize = lurkerBaseSize * (1 - retractedPercent * 0.8);
+                    if (currentLurkerSize > 2) {
+                        const lx = effectiveX + effectiveW / 2;
+                        const ly = y + effectiveH - currentLurkerSize / 2;
+                        if(platform.lurkerState === 'firing') {
+                            ctx.fillStyle = '#303033';
+                            ctx.beginPath();
+                            ctx.arc(lx, ly + currentLurkerSize*0.2, currentLurkerSize * 1.2, Math.PI*0.1, Math.PI*0.9);
+                            ctx.closePath();
+                            ctx.fill();
+                        } else {
+                            ctx.fillStyle = platform.lurkerState === 'warning' ? '#383838' : '#1a1a1a';
+                            ctx.beginPath();
+                            ctx.arc(lx, ly + currentLurkerSize*0.2, currentLurkerSize, Math.PI*0.2, Math.PI*0.8);
+                            ctx.closePath();
+                            ctx.fill();
+                        }
+                        
+                        // --- LURKER EYE LOGIC ---
+                        if (platform.lurkerState === 'warning') {
+                            const eyeXOffset = currentLurkerSize * 0.3;
+                            const eyeY = ly - currentLurkerSize * 0.1;
+                            const eyeRadius = currentLurkerSize * 0.22;
+                            
+                            // Sockets
+                            ctx.fillStyle = '#111';
+                            ctx.beginPath();
+                            ctx.arc(lx - eyeXOffset, eyeY, eyeRadius, 0, Math.PI * 2);
+                            ctx.arc(lx + eyeXOffset, eyeY, eyeRadius, 0, Math.PI * 2);
+                            ctx.fill();
+                            
+                            // Pupils
+                            ctx.fillStyle = 'hsl(50, 100%, 60%)';
+                            ctx.beginPath();
+                            ctx.arc(lx - eyeXOffset, eyeY, eyeRadius * 0.65, 0, Math.PI * 2);
+                            ctx.arc(lx + eyeXOffset, eyeY, eyeRadius * 0.65, 0, Math.PI * 2);
+                            ctx.fill();
+                        } else {
+                            // Original eye rendering for other states
+                            ctx.fillStyle = '#A0A0A0';
+                            ctx.beginPath();
+                            ctx.arc(lx - currentLurkerSize*0.3, ly - currentLurkerSize*0.1, currentLurkerSize*0.2, 0, Math.PI*2);
+                            ctx.arc(lx + currentLurkerSize*0.3, ly - currentLurkerSize*0.1, currentLurkerSize*0.2, 0, Math.PI*2);
+                            ctx.fill();
+                        }
+                        // --- END LURKER EYE LOGIC ---
 
-                // Cone part
-                const coneGrad = ctx.createRadialGradient(x + width/2, y + height, 0, x + width/2, y + height, width);
-                coneGrad.addColorStop(0, c1);
-                coneGrad.addColorStop(1, c2);
-                ctx.fillStyle = coneGrad;
-                ctx.beginPath();
-                ctx.moveTo(pipeX, coneY);
-                ctx.lineTo(pipeX + pipeWidth, coneY);
-                ctx.lineTo(x + width, y + height);
-                ctx.lineTo(x, y + height);
-                ctx.closePath();
-                ctx.fill();
-                ctx.stroke();
+                        if (platform.lurkerState === 'warning' || platform.lurkerState === 'firing') {
+                            ctx.fillStyle = platform.lurkerState === 'firing' ? 'rgba(40,40,45,0.5)' : 'rgba(50, 50, 55, 0.4)';
+                            ctx.beginPath();
+                            ctx.arc(lx, ly, currentLurkerSize * (1.2 + Math.sin(totalTimeElapsed * (platform.lurkerState === 'firing' ? 21 : 15) ) * 0.3), 0, Math.PI*2);
+                            ctx.fill();
+                        }
+                    }
+                }
             }
-            
             ctx.restore();
         }
-        function drawCircleWithGradient(x,y,r,c1,c2,s=1){ ctx.beginPath();const gr=ctx.createRadialGradient(x,y,0,x,y,r*s);gr.addColorStop(0,c1);gr.addColorStop(1,c2);ctx.fillStyle=gr;ctx.arc(x,y,r*s,0,Math.PI*2);ctx.fill();ctx.strokeStyle='rgba(0,0,0,0.4)';ctx.lineWidth=1.5;ctx.stroke();}
-        function drawPlatform(platform){ const {x,y,width,height, type, visualTheme, visualDetails, retractedPercent = 0} = platform; ctx.save(); if (type === 'ascent_funnel') { drawFunnel(ctx, x, y, width, height, false); ctx.restore(); return; } let effectiveW = width * (1 - retractedPercent * 0.5);  let effectiveH = height * (1 - retractedPercent); let effectiveX = x + (width - effectiveW) / 2; if (effectiveH < 1 && type === 'retracting_coral') { ctx.restore(); return; }  let cornerRad = PLATFORM_CORNER_RADIUS;  let baseC1 = platform.color1, baseC2 = platform.color2; switch(visualTheme) { case 'rock_formation': baseC1 = baseC1 || 'hsl(210, 10%, 35%)'; baseC2 = baseC2 || 'hsl(210, 10%, 25%)'; break; case 'ancient_coral_shelf': baseC1 = baseC1 || 'hsl(10, 50%, 60%)'; baseC2 = baseC2 || 'hsl(5, 60%, 45%)'; cornerRad = PLATFORM_CORNER_RADIUS * 1.5; break; case 'dense_kelp_bed': baseC1 = 'hsl(125, 35%, 25%)'; baseC2 = 'hsl(125, 40%, 18%)'; break;  case 'sunken_driftwood': baseC1 = 'hsl(30, 20%, 35%)'; baseC2 = baseC2 || 'hsl(30, 20%, 22%)'; cornerRad = PLATFORM_CORNER_RADIUS * 0.5; break; case 'rusted_shipwreck_panel': baseC1 = baseC1 || 'hsl(200, 12%, 40%)'; baseC2 = baseC2 || 'hsl(200, 8%, 28%)'; cornerRad = 2; break; case 'industrial_grate': baseC1 = baseC1 || 'hsl(210, 7%, 30%)'; baseC2 = baseC2 || 'hsl(210, 8%, 18%)'; cornerRad = 2; break; default: baseC1 = baseC1 || 'hsl(210, 10%, 35%)'; baseC2 = baseC2 || 'hsl(210, 10%, 25%)'; } drawPlatformCeiling_Base(effectiveX,y,effectiveW,effectiveH, baseC1, baseC2, cornerRad); if (visualDetails) { switch(visualTheme) { case 'rock_formation': if (effectiveH > 5 && visualDetails.cracks) { ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1.5; visualDetails.cracks.forEach(crack => { if (retractedPercent < 0.8) { ctx.beginPath(); ctx.moveTo(effectiveX + crack.x1 * effectiveW, y + crack.y1 * effectiveH); ctx.lineTo(effectiveX + crack.x2 * effectiveW, y + crack.y2 * effectiveH); ctx.stroke(); } }); } break; case 'ancient_coral_shelf': if (effectiveH > 3 && visualDetails.bumps) { visualDetails.bumps.forEach(bump => { ctx.fillStyle = bump.c; let r = bump.r * (1-retractedPercent*0.8); if (r > 1) { ctx.beginPath(); ctx.arc(effectiveX + bump.x * effectiveW, y + effectiveH - r * bump.yAnchor, r, 0, Math.PI*2); ctx.fill(); } }); } break; case 'dense_kelp_bed':  if (effectiveH > 10 && visualDetails.kelpStrands) {  ctx.strokeStyle = `hsla(120, 30%, 30%, 0.6)`;  ctx.lineWidth = Math.max(1, 3 * (1-retractedPercent*0.5)); visualDetails.kelpStrands.forEach(strand => { let kxBaseOnOriginal = x + strand.startXOffset * width;  let kxAnimated = kxBaseOnOriginal + Math.sin(totalTimeElapsed * 1.2 + strand.phase) * 3; if (kxAnimated < effectiveX - ctx.lineWidth || kxAnimated > effectiveX + effectiveW + ctx.lineWidth) return;  let kelpLength = strand.baseLength * (1-retractedPercent*0.7); if (kelpLength < 5) return; ctx.beginPath(); ctx.moveTo(kxAnimated, y + effectiveH);  let cp1x = kxAnimated + Math.sin(totalTimeElapsed * 0.8 + strand.phase * 1.2) * 1; let cp1y = y + effectiveH + kelpLength * 0.2; let cp2x = kxAnimated + Math.cos(totalTimeElapsed * 1.0 + strand.phase * 1.5) * 3; let cp2y = y + effectiveH + kelpLength * 0.6; let endX = kxAnimated + Math.sin(totalTimeElapsed * 1.1 + strand.phase * 2) * 4; let endY = y + effectiveH + kelpLength; ctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, endX, endY); ctx.stroke(); }); } break; case 'sunken_driftwood': if (effectiveH > 5 && effectiveW > 10 && visualDetails.grains) { ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1; visualDetails.grains.forEach(grain => { ctx.beginPath(); ctx.moveTo(effectiveX, y + grain.startY * effectiveH); ctx.bezierCurveTo(effectiveX+effectiveW*0.3, y + grain.startY * effectiveH + grain.c1y, effectiveX+effectiveW*0.7, y + grain.startY * effectiveH + grain.c2y, effectiveX+effectiveW, y + grain.startY * effectiveH); ctx.stroke(); }); } break; case 'rusted_shipwreck_panel': if (effectiveH > 8 && effectiveW > 20 && visualDetails.rivets) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; visualDetails.rivets.forEach(rivet => { let rivetSize = rivet.s * (1-retractedPercent*0.7); if (rivetSize < 0.5) return; ctx.beginPath(); ctx.arc(effectiveX + rivet.x * effectiveW, y + rivet.y * effectiveH, rivetSize,0,Math.PI*2); ctx.fill(); }); } break; case 'industrial_grate': if (effectiveH > 5 && visualDetails.teeth) { ctx.fillStyle = baseC2; visualDetails.teeth.forEach(tooth => { let currentToothWidth = tooth.w * (1 - retractedPercent * 0.5); let currentToothHeight = tooth.h * (1 - retractedPercent * 0.3); if (currentToothWidth < 2 || currentToothHeight < 2) return; let toothX = effectiveX + tooth.normX * effectiveW - currentToothWidth/2; if (toothX + currentToothWidth > effectiveX + effectiveW) currentToothWidth = (effectiveX + effectiveW) - toothX; if (toothX < effectiveX) {currentToothWidth -= (effectiveX - toothX); toothX = effectiveX;} if (currentToothWidth > 1) { ctx.fillRect(toothX, y + effectiveH, currentToothWidth, currentToothHeight); } }); } break; } } if (effectiveH > 5) {  if (type === 'bouncy_vent') { ctx.fillStyle = 'rgba(160, 210, 190, 0.5)'; let ventY = y + effectiveH * 0.5; let ventSize = Math.min(effectiveW, effectiveH) * 0.4 * (1-retractedPercent*0.5); if (ventSize > 1) { ctx.beginPath(); ctx.ellipse(effectiveX + effectiveW/2, ventY, ventSize, ventSize*0.6, 0, 0, Math.PI*2); ctx.fill(); ctx.fillStyle = 'rgba(210,240,225,0.65)'; ctx.beginPath(); ctx.ellipse(effectiveX+effectiveW/2, ventY, ventSize*0.5, ventSize*0.3,0,0,Math.PI*2);ctx.fill(); } } else if (type === 'conveyor_current' && effectiveW > 20) { ctx.fillStyle = 'rgba(190, 170, 60, 0.6)'; let arrowSize = 10 * (1-retractedPercent*0.6); if (arrowSize > 2) { for (let i=0; i < effectiveW/30; i++) { ctx.beginPath(); let ax = effectiveX + 15 + i*30; if(ax > effectiveX + effectiveW - arrowSize - 5) continue; if (platform.direction > 0) { ctx.moveTo(ax - arrowSize, y + effectiveH/2 - arrowSize/2); ctx.lineTo(ax, y + effectiveH/2); ctx.lineTo(ax - arrowSize, y + effectiveH/2 + arrowSize/2); } else { ctx.moveTo(ax + arrowSize, y + effectiveH/2 - arrowSize/2); ctx.lineTo(ax, y + effectiveH/2); ctx.lineTo(ax + arrowSize, y + effectiveH/2 + arrowSize/2); } ctx.fill(); } } }  if (platform.hasLurker) {  const lurkerBaseSize = 15; let currentLurkerSize = lurkerBaseSize * (1 - retractedPercent * 0.8);  if (currentLurkerSize > 2) {  const lx = effectiveX + effectiveW / 2;  const ly = y + effectiveH - currentLurkerSize / 2;  if(platform.lurkerState === 'firing') { ctx.fillStyle = '#303033';  ctx.beginPath(); ctx.arc(lx, ly + currentLurkerSize*0.2, currentLurkerSize * 1.2, Math.PI*0.1, Math.PI*0.9); ctx.closePath(); ctx.fill(); } else { ctx.fillStyle = platform.lurkerState === 'warning' ? '#383838' : '#1a1a1a';  ctx.beginPath(); ctx.arc(lx, ly + currentLurkerSize*0.2, currentLurkerSize, Math.PI*0.2, Math.PI*0.8); ctx.closePath(); ctx.fill(); } ctx.fillStyle = '#A0A0A0';  ctx.beginPath(); ctx.arc(lx - currentLurkerSize*0.3, ly - currentLurkerSize*0.1, currentLurkerSize*0.2, 0, Math.PI*2); ctx.arc(lx + currentLurkerSize*0.3, ly - currentLurkerSize*0.1, currentLurkerSize*0.2, 0, Math.PI*2); ctx.fill();  if (platform.lurkerState === 'warning' || platform.lurkerState === 'firing') {  ctx.fillStyle = platform.lurkerState === 'firing' ? 'rgba(40,40,45,0.5)' : 'rgba(50, 50, 55, 0.4)';  ctx.beginPath(); ctx.arc(lx, ly, currentLurkerSize * (1.2 + Math.sin(totalTimeElapsed * (platform.lurkerState === 'firing' ? 21 : 15) ) * 0.3), 0, Math.PI*2); ctx.fill();  }  }  }  } ctx.restore(); }
         function drawPlatformCeiling_Base(x,y,w,h,c1,c2,cornerRadius){ if (w < 1 || h < 1) return; ctx.beginPath(); const grad=ctx.createRadialGradient(x+w/2,y+h/2,0,x+w/2,y+h/2,Math.max(w,h)*0.7); grad.addColorStop(0,c1);grad.addColorStop(1,c2);ctx.fillStyle=grad; if(typeof ctx.roundRect==='function'){ctx.roundRect(x,y,w,h,[cornerRadius]);ctx.fill();ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=2;ctx.stroke();} else{ctx.fillRect(x,y,w,h);ctx.strokeRect(x,y,w,h);} }
         function generatePlatformVisualDetails(platform) { platform.visualDetails = {}; const { width, height, visualTheme } = platform; let c1 = platform.color1, c2 = platform.color2; switch(visualTheme) { case 'rock_formation': platform.visualDetails.cracks = []; for(let i=0; i < 2 + width/60; i++){ platform.visualDetails.cracks.push({ x1: Math.random(), y1: Math.random(), x2: Math.random(), y2: Math.random() }); } break; case 'ancient_coral_shelf': c1 = c1 || 'hsl(10, 50%, 60%)'; c2 = c2 || 'hsl(5, 60%, 45%)'; platform.visualDetails.bumps = []; for(let i=0; i < 3 + width/40; i++){ platform.visualDetails.bumps.push({ c: Math.random() < 0.5 ? c1 : c2, r: (2 + Math.random()*4), x: Math.random(), yAnchor: 0.1 + Math.random() * 0.8 }); } break; case 'dense_kelp_bed':  platform.visualDetails.kelpStrands = []; const kelpMarginPercent = 0.15;  const kelpMarginPixels = width * kelpMarginPercent; const kelpSpacing = 10;  const availableWidthForKelp = width - 2 * kelpMarginPixels; if (availableWidthForKelp > 0) {  const numKelp = Math.max(1, Math.floor(availableWidthForKelp / kelpSpacing) +1);  for (let i = 0; i < numKelp; i++) {  let offsetRatio = (numKelp > 1 ? (i / (numKelp -1)) : 0.5) ;  let actualOffsetInAvailable = offsetRatio * availableWidthForKelp; let finalXOffsetOnPlatform = kelpMarginPixels + actualOffsetInAvailable; platform.visualDetails.kelpStrands.push({  startXOffset: finalXOffsetOnPlatform / width,  phase: i * (Math.PI / (numKelp > 1 ? (numKelp -1) : 1) ),  baseLength: 25 + Math.random()*15  });  } } break; case 'sunken_driftwood': platform.visualDetails.grains = []; for(let i=0; i < height/4; i++){ platform.visualDetails.grains.push({ startY: (i*4+2)/height, c1y: (Math.random()-0.5)*4, c2y: (Math.random()-0.5)*4 }); } break; case 'rusted_shipwreck_panel': platform.visualDetails.rivets = []; for(let i=0; i < width/25; i++){ platform.visualDetails.rivets.push({ x: (5+i*25)/width, y: (height-5)/height, s:2 }); platform.visualDetails.rivets.push({ x: (5+i*25)/width, y: 5/height, s:2 }); } break; case 'industrial_grate': platform.visualDetails.teeth = []; let toothWidth = 10; let toothHeight = 6; let numTeeth = Math.floor(width / (toothWidth + 4)); if (numTeeth > 0) { let totalTeethWidth = numTeeth * (toothWidth + 4) - 4; let startOffset = (width - totalTeethWidth) / 2; for (let i = 0; i < numTeeth; i++) { platform.visualDetails.teeth.push({ normX: (startOffset + i * (toothWidth + 4) + toothWidth/2) / width, w: toothWidth, h: toothHeight }); } } break; } }
         function drawGem(x,y,r,s=1){ drawCircleWithGradient(x,y,r,'rgba(100,220,255,0.95)','rgba(50,150,200,0.75)',s);ctx.fillStyle='rgba(220,255,255,0.85)';ctx.beginPath();ctx.arc(x-r*0.3*s,y-r*0.3*s,r*0.25*s,0,Math.PI*2);ctx.fill();}
