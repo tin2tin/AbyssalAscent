@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Abyssal Runner</title>
+    <style>
+        html {
+            height: 100%;
+            touch-action: none;
+        }
+        body {
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            background: #000000;
+            overflow: hidden;
+            font-family: sans-serif;
+            user-select: none;
+        }
+        #game-super-container {
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-grow: 1;
+            width: 100%;
+            overflow: hidden;
+        }
+        canvas {
+            max-width: 100%;
+            max-height: 100%;
+            border: 2px solid #00111a;
+            background: #000000;
+            display: block;
+            aspect-ratio: 900 / 600;
+            object-fit: contain;
+            touch-action: none;
+        }
+        #top-right-controls { position: absolute; top: 10px; right: 10px; left: auto; z-index: 100; display: none; }
+        #pause-button { padding: 8px 15px; background: linear-gradient(to bottom, #4A6B7E, #3A5060); border: 2px solid #1C2A34; border-radius: 5px; color: white; cursor: pointer; font-family: sans-serif; font-size: 16px; white-space: nowrap; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); user-select: none; touch-action: manipulation; }
+        #pause-button:active { background: linear-gradient(to bottom, #3A5060, #4A6B7E); box-shadow: inset 1px 1px 3px rgba(0,0,0,0.5); }
+
+        #mobile-controls-container {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            z-index: 10;
+            box-sizing: border-box;
+        }
+        #mobile-controls {
+            display: none; /* Controlled by JS */
+            width: 100%;
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 10px 15px;
+            box-sizing: border-box;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+        #mobile-controls .control-group {
+            display: flex;
+            gap: 20px;
+        }
+        #mobile-controls button {
+            width: 80px;
+            height: 80px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(to bottom, #20B2AA, #008080);
+            border: 2px solid #004D40;
+            border-radius: 50%;
+            color: white;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.5);
+            user-select: none;
+            touch-action: manipulation;
+            text-align: center;
+            line-height: 1;
+        }
+        #mobile-controls button:active {
+            background: linear-gradient(to bottom, #008080, #20B2AA);
+            box-shadow: inset 1px 1px 3px rgba(0,0,0,0.5);
+        }
+
+        #pause-menu { display: none; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,10,20,0.9); z-index: 200; flex-direction: column; justify-content: center; align-items: center; color: #E0F7FA; font-size: 24px; }
+        #pause-menu h2 { font-size: 4em; margin-bottom: 30px; color: #FFEB3B; text-shadow: 2px 2px 5px rgba(0,0,0,0.7); }
+        #pause-menu button { padding: 15px 30px; margin: 10px 0; font-size: 1.5em; background: linear-gradient(to bottom, #20B2AA, #008080); border: 2px solid #004D40; border-radius: 8px; color: white; cursor: pointer; box-shadow: 2px 2px 5px rgba(0,0,0,0.5); user-select: none; touch-action: manipulation; }
+        #pause-menu button:active { background: linear-gradient(to bottom, #008080, #20B2AA); box-shadow: inset 1px 1px 3px rgba(0,0,0,0.5); }
+        #close-app-button { background: linear-gradient(to bottom, #E57373, #C62828) !important; }
+        #close-app-button:active { background: linear-gradient(to bottom, #C62828, #E57373) !important; }
+    </style>
+</head>
+<body>
+    <div id="game-super-container">
+        <div id="top-right-controls"><button id="pause-button">PAUSE</button></div>
+        <canvas id="gameCanvas"></canvas>
+        <div id="mobile-controls-container">
+            <div id="mobile-controls">
+                <div class="control-group">
+                    <button id="left-btn">LEFT</button>
+                    <button id="right-btn">RIGHT</button>
+                </div>
+                <button id="jump-btn">PUSH</button>
+            </div>
+        </div>
+    </div>
+    <div id="pause-menu">
+        <h2>PAUSED</h2>
+        <button id="resume-button">Resume Run</button>
+        <button id="restart-from-pause">New Run</button>
+        <button id="mute-button-from-pause">Mute Echoes</button>
+        <button id="close-app-button">Return to Surface</button>
+    </div>
+
+    <script>
+    (function() {
+        'use strict';
+
+        //================================================================
+        // 1. DOM & CANVAS SETUP
+        //================================================================
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const topRightControls = document.getElementById('top-right-controls');
+        const mobileControls = document.getElementById('mobile-controls');
+        const pauseMenu = document.getElementById('pause-menu');
+        const pauseButton = document.getElementById('pause-button');
+        const resumeButton = document.getElementById('resume-button');
+        const closeAppButton = document.getElementById('close-app-button');
+        const restartFromPauseButton = document.getElementById('restart-from-pause');
+        const muteButtonFromPause = document.getElementById('mute-button-from-pause');
+        const leftBtn = document.getElementById('left-btn');
+        const rightBtn = document.getElementById('right-btn');
+        const jumpBtn = document.getElementById('jump-btn');
+
+        //================================================================
+        // 2. GAME CONSTANTS
+        //================================================================
+        const TARGET_CANVAS_WIDTH = 900;
+        const TARGET_CANVAS_HEIGHT = 600;
+        canvas.width = TARGET_CANVAS_WIDTH;
+        canvas.height = TARGET_CANVAS_HEIGHT;
+        const isAndroid = /Android/i.test(navigator.userAgent);
+        const FPS = 60; 
+
+        // Physics Constants
+        const BUOYANCY = -0.12 * FPS * FPS;                    
+        const PLAYER_HORIZONTAL_ACCEL = 0.5 * FPS * FPS;       
+        const PLAYER_MAX_SPEED = 4.0 * FPS;                    
+        const PLAYER_BASE_PUSH_FORCE = 9.5 * FPS;              
+        const PLATFORM_ATTACH_PULL_UP = 0.35 * FPS * FPS;      
+
+        // Damping/Resistance
+        const DAMPING_V = (1 - 0.97) * FPS;                    
+        const DAMPING_H_NORMAL = (1 - 0.92) * FPS;             
+        const DAMPING_H_SLIPPERY = (1 - 0.992) * FPS;           
+        
+        // Gameplay & Layout Constants
+        const CAVE_CEILING_Y = 50;
+        const CAVE_FLOOR_Y = TARGET_CANVAS_HEIGHT - 30;
+        const PLATFORM_MIN_Y = CAVE_CEILING_Y + 40;
+        const PLATFORM_MAX_Y = CAVE_FLOOR_Y - 150;
+        const MAX_PLATFORM_GAP = 220;
+        
+        const PLATFORM_CORNER_RADIUS = 10;
+        const SPECIAL_PLATFORM_TYPES = ['disappearing_coral', 'bouncy_vent', 'conveyor_current', 'retracting_coral', 'slippery_kelp_patch'];
+        const PLATFORM_VISUAL_THEMES = ['rock_formation', 'ancient_coral_shelf', 'dense_kelp_bed', 'sunken_driftwood', 'rusted_shipwreck_panel', 'industrial_grate'];
+
+        // Audio Constants
+        const BASE_SFX_VOL = 0.18 * 0.7;
+
+        //================================================================
+        // 3. GAME STATE & VARIABLES
+        //================================================================
+        const keys = {};
+        
+        let player = {};
+        let platforms = [];
+        let enemies = [];
+        let stars = [];
+        let powerUps = [];
+        let gameEffectParticles = [];
+        let bubbleLayers = [];
+        
+        let score = 0;
+        let gameState = 'start';
+        let scrollSpeed = 80;
+
+        let rightmostX = 0;
+        let difficultyLevel = 1;
+        let lastPlatformY = TARGET_CANVAS_HEIGHT / 2;
+
+        let highScore = parseInt(localStorage.getItem('abyssalRunnerHighScore_v10') || '0', 10);
+        let gameOverFinalScore = 0;
+        let transitionAlpha = 0;
+        let transitionSpeed = 1.8;
+        let transitionCallback = null;
+        let playerCanMove = false;
+        let justRestartedFromGameOver = false;
+
+        let abyssBackgroundLayers = [];
+        let backgroundScrollX = 0;
+        let gradientBaseHue = 220;
+
+        // Audio state
+        let audioContext;
+        let isMuted = false;
+        let audioUnlocked = false;
+
+        // Timing variables
+        let lastTime = 0;
+        let totalTimeElapsed = 0;
+        
+        //================================================================
+        // 4. GAME CLASSES
+        //================================================================
+        class GameEffectParticle{ constructor(x,y,type,color,size,vx,vy,lifetime){this.x=x;this.y=y;this.type=type;this.color=color;this.size=size;this.vx=vx;this.vy=vy;this.alpha=1;this.lifetime=lifetime;this.originalLifetime=this.lifetime;this.buoyancyEffect=(type==='push_down_burst'||type==='geyser_burst')?5.4:((type==='attach_clink')?1.8:-3.6); if(type==='death_bubble'){this.buoyancyEffect=-15;}} update(dt){this.x+=this.vx*dt;this.y+=this.vy*dt;this.vy+=this.buoyancyEffect*dt;this.vy*=(1-(1.2*dt));this.vx*=(1-(1.2*dt));this.lifetime-=dt;this.alpha=this.lifetime/this.originalLifetime;this.size*=(1 - (1/this.originalLifetime) * dt);if(this.lifetime<=0||this.size<0.2)this.lifetime=0;} draw(ctx){if(this.lifetime<=0)return;ctx.save();ctx.globalAlpha=this.alpha*0.5;ctx.fillStyle=this.color;ctx.beginPath();ctx.arc(this.x,this.y,this.size,0,Math.PI*2);ctx.fill();ctx.restore();}}
+        class AmbientBubble { constructor(scrollFactor) { this.scrollFactor = scrollFactor; this.reset(true); } reset(initial = false) { this.radius = 1 + Math.random() * (6 * this.scrollFactor); this.x = initial ? Math.random() * TARGET_CANVAS_WIDTH : TARGET_CANVAS_WIDTH + this.radius + Math.random() * 100; this.y = Math.random() * TARGET_CANVAS_HEIGHT; this.baseSpeedY = -(10 + Math.random() * 60) * this.scrollFactor; this.speedY = this.baseSpeedY; this.speedX = (Math.random() - 0.5) * 15; this.alpha = 0.05 + Math.random() * 0.45; this.color = `rgba(170, 220, 255, ${this.alpha})`; this.stuckTimer = 0; } update(dt) { this.x -= scrollSpeed * this.scrollFactor * dt; this.y += this.speedY * dt; this.x += this.speedX * dt; this.speedY *= (1 - 0.12 * dt); this.speedX *= (1 - 0.6 * dt); if (this.y < -this.radius * 3) { this.y = TARGET_CANVAS_HEIGHT + this.radius; this.x = Math.random() * TARGET_CANVAS_WIDTH; this.speedY = this.baseSpeedY; } if (this.x < -this.radius) { this.reset(false); } if (this.stuckTimer <= 0) { for (const p of platforms) { if (this.x + this.radius > p.x && this.x - this.radius < p.x + p.width && this.y + this.radius > p.y && this.y - this.radius < p.y + p.height) { if (Math.abs(this.speedY) > 3) { this.speedY *= -0.3; this.y += this.speedY * 2.5 * dt; this.stuckTimer = 0.16 + Math.random() * 0.33; } break; } } } if (this.stuckTimer > 0) { this.stuckTimer -= dt; this.speedY = this.baseSpeedY * 0.05; } else { this.speedY = Math.min(this.speedY, this.baseSpeedY); } } draw(ctx) { ctx.save(); ctx.globalAlpha = 0.5; ctx.fillStyle = this.color; ctx.beginPath(); ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2); ctx.fill(); ctx.restore(); } }
+        class AbyssalJellyfish { constructor() { this.radius = 20 + Math.random() * 10; this.y = CAVE_CEILING_Y + this.radius + Math.random() * (CAVE_FLOOR_Y - CAVE_CEILING_Y - this.radius*2); this.x = TARGET_CANVAS_WIDTH + this.radius + Math.random() * 400; this.speedX = -(10 + Math.random() * 20); this.speedY = (Math.random() - 0.6) * 50; this.colorLight = `hsla(${180 + Math.random()*60}, 70%, 70%, 0.4)`; this.colorDark = `hsla(${190 + Math.random()*60}, 60%, 50%, 0.6)`; this.type = 'jellyfish'; this.bobOffset = Math.random() * Math.PI * 2; this.bobSpeed = 1.5; this.tentacleCount = 6 + Math.floor(Math.random()*4); this.tentacleLengthBase = this.radius * 1.8; this.tentacleSegments = 4; this.pushedTimer = 0; this.pushForceX = 0; this.pushForceY = 0; this.tentaclePhases = []; for(let i=0; i<this.tentacleCount; i++) { this.tentaclePhases.push({ lenFactor: 0.8 + Math.random()*0.4, swayFactor: (Math.random()-0.5) * 20, curveFactor1: (Math.random()-0.5) * 10, curveFactor2: (Math.random()-0.5) * 10, }); } } update(dt) { if (this.pushedTimer > 0) { this.x += this.pushForceX * dt; this.y += this.pushForceY * dt; this.pushForceX *= (1-4.8*dt); this.pushForceY *= (1-4.8*dt); this.pushedTimer-=dt; } else { this.x += (this.speedX - scrollSpeed) * dt; this.y += this.speedY*dt; } this.bobOffset += this.bobSpeed*dt; if ((this.y - this.radius < CAVE_CEILING_Y && this.speedY < 0) || (this.y + this.radius > CAVE_FLOOR_Y && this.speedY > 0)) { this.speedY *= -0.8; } if (this.x + this.radius < -50) { this.y = CAVE_CEILING_Y + this.radius + Math.random() * (CAVE_FLOOR_Y - CAVE_CEILING_Y - this.radius*2); this.x = TARGET_CANVAS_WIDTH + this.radius + Math.random() * 300; } } draw(ctx) { const drawY = this.y + Math.sin(this.bobOffset * 1.5) * 4; const bellRadius = this.radius; const bellHeight = this.radius * 0.8; ctx.lineWidth = 2; for(let i=0; i < this.tentacleCount; i++) { ctx.beginPath(); let startX = this.x + Math.cos( (i / this.tentacleCount) * Math.PI*2 + this.bobOffset*0.3) * bellRadius * 0.6; let startY = drawY + bellHeight * 0.3 + Math.sin( (i / this.tentacleCount) * Math.PI*2 + this.bobOffset*0.3) * bellRadius * 0.1; ctx.moveTo(startX, startY); let prevX = startX; let prevY = startY; let tPhase = this.tentaclePhases[i]; let tLength = this.tentacleLengthBase * tPhase.lenFactor * (0.9 + Math.sin(this.bobOffset * 2 + i*0.7)*0.1); for (let j = 1; j <= this.tentacleSegments; j++) { let segmentRatio = j / this.tentacleSegments; let controlX = prevX + Math.sin(this.bobOffset * 0.8 + i + j*0.5) * tPhase.curveFactor1 * 0.5; let controlY = prevY + tLength / this.tentacleSegments * 0.5 + Math.cos(this.bobOffset + i + j*0.6) * tPhase.curveFactor2 * 0.5; let endX = startX + Math.sin(this.bobOffset * 0.5 + i * 0.8 + segmentRatio * Math.PI) * tPhase.swayFactor * segmentRatio; let endY = startY + tLength * segmentRatio + Math.cos(this.bobOffset * 1.1 + i*0.5 + segmentRatio * 0.7) * 5; ctx.quadraticCurveTo(controlX, controlY, endX, endY); prevX = endX; prevY = endY; } ctx.strokeStyle = `hsla(${200 + Math.sin(this.bobOffset + i*0.4)*30}, 60%, 70%, 0.5)`; ctx.stroke(); } ctx.beginPath(); ctx.ellipse(this.x, drawY, bellRadius, bellHeight, 0, Math.PI, Math.PI*2, false); ctx.ellipse(this.x, drawY, bellRadius * 0.95, bellHeight * 0.7, 0, 0, Math.PI, false); ctx.closePath(); const grad = ctx.createRadialGradient(this.x, drawY - bellHeight*0.2, bellRadius*0.1, this.x, drawY, bellRadius); grad.addColorStop(0, this.colorLight); grad.addColorStop(1, this.colorDark); ctx.fillStyle = grad; ctx.fill(); } }
+        class PowerUp{ constructor(x,y,type){ this.x=x;this.y=y;this.type=type;this.radius=14;this.collected=false;this.scale=1;this.symbol='';this.animationTimer=0;this.animationSpeed=3.6; switch(this.type){ case 'shield_bubble':this.color1='hsl(195, 45%, 70%)';this.color2='hsl(200, 50%, 60%)';this.symbol='SHD';break; case 'propulsion_boost':this.color1='hsl(120, 50%, 65%)';this.color2='hsl(140, 55%, 45%)';this.symbol='BST';break; case 'extra_life':this.color1='hsl(35, 70%, 60%)';this.color2='hsl(28, 75%, 45%)';this.symbol='+1UP';this.radius=16;break; } } draw(ctx){ if(this.collected)return; const offsetY=Math.sin(this.animationTimer)*6; drawCircleWithGradient(this.x,this.y+offsetY,this.radius,this.color1,this.color2,this.scale); ctx.fillStyle='black';ctx.strokeStyle='white';ctx.lineWidth=1.5; ctx.font = (this.type === 'extra_life') ? 'bold 10px Arial' : 'bold 11px Arial'; ctx.textAlign='center'; ctx.strokeText(this.symbol,this.x,this.y+offsetY+4);ctx.fillText(this.symbol,this.x,this.y+offsetY+4); } update(dt){this.animationTimer+=this.animationSpeed*dt;}}
+        
+        //================================================================
+        // 5. AUDIO HANDLING
+        //================================================================
+        function unlockAudioIfNeeded() { if (audioUnlocked) return true; if (!audioContext) { try { audioContext = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { return false; } } if (audioContext && audioContext.state === 'suspended') { audioContext.resume().then(() => { audioUnlocked = true; }).catch(e => {}); return false;  } else if (audioContext && audioContext.state === 'running') { audioUnlocked = true; return true; } return false; }
+        function attemptPlayMusicAndUnlockAudio() { if (!audioUnlocked) { unlockAudioIfNeeded(); } }
+        function createOscillatorSound(f,duration,t,pStartTime=0, vol = BASE_SFX_VOL, attackTime=0.001, decayTime=0.1, sustainLevel=0.001) { if(isMuted || !unlockAudioIfNeeded()) return; const actualStartTime=audioContext.currentTime+pStartTime; const osc=audioContext.createOscillator();const gain=audioContext.createGain(); osc.type=t; osc.frequency.setValueAtTime(f,actualStartTime); gain.gain.setValueAtTime(0, actualStartTime); gain.gain.linearRampToValueAtTime(vol, actualStartTime + attackTime); gain.gain.setValueAtTime(vol, actualStartTime + duration - decayTime); gain.gain.linearRampToValueAtTime(sustainLevel, actualStartTime + duration); osc.connect(gain);gain.connect(audioContext.destination); osc.start(actualStartTime);osc.stop(actualStartTime+duration + 0.05); }
+        function playPushFromCeilingSound(){ createOscillatorSound(80, 0.25, 'sine', 0, BASE_SFX_VOL * 1.1, 0.01, 0.2); createOscillatorSound(100, 0.15, 'square', 0.02, BASE_SFX_VOL * 0.6, 0.01, 0.1); emitParticles(player.x,player.y-player.radius,'push_down_burst');}
+        function playAttachToCeilingSound(){ createOscillatorSound(250, 0.15, 'sine', 0, BASE_SFX_VOL * 0.8, 0.02, 0.1); createOscillatorSound(150, 0.1, 'triangle', 0.03, BASE_SFX_VOL * 0.6, 0.01, 0.08); emitParticles(player.x,player.y-player.radius,'attach_clink');}
+        function playGemSound(){ createOscillatorSound(700, 0.1, 'sine', 0.08, BASE_SFX_VOL * 0.45, 0.005, 0.09); emitParticles(player.x,player.y,'gem_shine');}
+        function playBouncyVentSound(){ createOscillatorSound(150, 0.35, 'sine', 0, BASE_SFX_VOL * 1.1, 0.05, 0.25); emitParticles(player.x,player.y-player.radius,'geyser_burst');}
+        function playLifeLostSound(){ createOscillatorSound(70, 0.5, 'sine', 0, BASE_SFX_VOL * 1.4, 0.05, 0.4); createOscillatorSound(90, 0.4, 'square', 0.1, BASE_SFX_VOL * 0.8, 0.05, 0.3);}
+        function playGameOverSound(){ createOscillatorSound(150, 0.6, 'sine', 0, BASE_SFX_VOL * 1.1, 0.1, 0.45); createOscillatorSound(75, 0.7, 'sine', 0.2, BASE_SFX_VOL, 0.1, 0.55);}
+        function playPowerUpSound(type){ let baseFreq = 300, secondFreq = 400, waveform = 'triangle', dur = 0.25; createOscillatorSound(baseFreq, dur, waveform, 0, BASE_SFX_VOL*0.8, 0.02, dur*0.8); createOscillatorSound(secondFreq, dur, waveform, 0.05, BASE_SFX_VOL*0.7, 0.02, dur*0.8); }
+        function playRetractPlatformSound(){ createOscillatorSound(150, 0.35, 'sawtooth', 0, BASE_SFX_VOL * 0.8, 0.05, 0.25); createOscillatorSound(100, 0.3, 'square', 0.08, BASE_SFX_VOL * 0.6, 0.05, 0.2); } 
+        function playJellyfishBounceSound(){ createOscillatorSound(180, 0.25, 'sine', 0, BASE_SFX_VOL * 1.2, 0.01, 0.2); }
+        function playJellyfishPushedSound(){ createOscillatorSound(100, 0.25, 'sine', 0, BASE_SFX_VOL * 0.8, 0.02, 0.2); createOscillatorSound(150, 0.15, 'square', 0.03, BASE_SFX_VOL * 0.45, 0.01, 0.1); }
+        function toggleMute(){ isMuted=!isMuted; if(muteButtonFromPause) muteButtonFromPause.textContent=isMuted?'Unmute Echoes':'Mute Echoes'; if(!isMuted) unlockAudioIfNeeded(); }
+
+        //================================================================
+        // 6. INITIALIZATION & LEVEL GENERATION
+        //================================================================
+        function setupEventListeners() {
+            window.addEventListener('keydown', e => { keys[e.key] = true; });
+            window.addEventListener('keyup',e=>keys[e.key]=false);
+            const setupTouchControl = (btn,key) => { 
+                const onStart = (e) => { e.preventDefault(); attemptPlayMusicAndUnlockAudio(); keys[key]=true; if(key===' '&&gameState==='start'){ gameState='playing';playerCanMove=true;updateUIVisibility();keys[' ']=false; } else if(key===' '&&(gameState==='gameOver'||gameState==='gameWon')){ resetGame(true);keys[' ']=false;justRestartedFromGameOver=true; } };
+                const onEnd = (e) => { e.preventDefault(); keys[key]=false; };
+                btn.addEventListener('touchstart',onStart,{passive:false});
+                btn.addEventListener('touchend',onEnd,{passive:false});
+                btn.addEventListener('mousedown',()=> onStart({preventDefault: ()=>{}}));
+                btn.addEventListener('mouseup',()=> onEnd({preventDefault: ()=>{}}));
+                btn.addEventListener('mouseleave',()=>keys[key]=false);
+            }
+            if(leftBtn) setupTouchControl(leftBtn,'ArrowLeft');
+            if(rightBtn) setupTouchControl(rightBtn,'ArrowRight');
+            if(jumpBtn) setupTouchControl(jumpBtn,' ');
+            if(pauseButton) pauseButton.addEventListener('click', () => { if (gameState === 'playing') { gameState = 'paused'; playerCanMove = false; updateUIVisibility(); } });
+            if(resumeButton) resumeButton.addEventListener('click',()=>{ if(gameState==='paused'){gameState='playing';playerCanMove=true;updateUIVisibility();}});
+            if(restartFromPauseButton) restartFromPauseButton.addEventListener('click',()=>{ if(gameState==='paused'||confirm("Start a New Run?")){resetGame(true);}});
+            if(closeAppButton) closeAppButton.addEventListener('click',()=>{ if(window.AndroidInterface&&typeof window.AndroidInterface.closeApp==='function'){window.AndroidInterface.closeApp();}else{alert("This feature is only available in the Android app.");}});
+            if (muteButtonFromPause) muteButtonFromPause.addEventListener('click',toggleMute);
+        }
+
+        function resetGame(isFullReset = false){
+            if(isFullReset){
+                player.lives=3; score = 0; difficultyLevel = 1;
+                scrollSpeed = 80;
+                highScore = parseInt(localStorage.getItem('abyssalRunnerHighScore_v10') || '0', 10);
+                gradientBaseHue = 220;
+            }
+            initRun();
+            gameState='playing'; playerCanMove=true;
+            transitionAlpha=0; transitionCallback=null;
+            gameEffectParticles=[];
+            attemptPlayMusicAndUnlockAudio();
+            updateUIVisibility();
+        }
+
+        function initRun() {
+            platforms=[]; stars=[]; powerUps=[]; gameEffectParticles=[]; enemies=[];
+            difficultyLevel = 1;
+            scrollSpeed = 80;
+            
+            player = {
+                x: 150, y: TARGET_CANVAS_HEIGHT / 2, radius: 15, baseRadius: 15, maxRadius: 26, radiusGrowthPerStar: 0.25,
+                vx: 0, vy: 0, isAttached: false, lives: player.lives || 3, scale: 1,
+                canTakeDamage: true, invincible: false, invincibleTimer: 0,
+                speedBoost: false, speedBoostTimer: 0,
+                currentPushForce: PLAYER_BASE_PUSH_FORCE,
+                isDead: false
+            };
+            
+            generateBackgrounds();
+            backgroundScrollX = 0;
+            setupAmbientEffects();
+
+            rightmostX = 0;
+            lastPlatformY = player.y - 80;
+            spawnInitialPlatforms();
+        }
+        
+        function spawnInitialPlatforms() {
+            let startPlatform = createPlatform(player.x - 50, player.y - 80, true);
+            platforms.push(startPlatform);
+            rightmostX = startPlatform.x + startPlatform.width;
+            manageWorldElements(0);
+        }
+        
+        function manageWorldElements(dt) {
+            const scrollDelta = scrollSpeed * dt;
+            platforms.forEach(p => { p.x -= (scrollDelta + p.speed * dt); });
+            stars.forEach(s => s.x -= scrollDelta);
+            powerUps.forEach(p => p.x -= scrollDelta);
+            enemies.forEach(e => e.update(dt));
+
+            platforms = platforms.filter(p => p.x + p.width > -50);
+            stars = stars.filter(s => s.x + s.radius > -50);
+            powerUps = powerUps.filter(pu => pu.x + pu.radius > -50);
+            enemies = enemies.filter(e => e.x + e.radius > -50);
+            
+            rightmostX -= scrollDelta;
+
+            while (rightmostX < TARGET_CANVAS_WIDTH + 200) {
+                spawnPlatformCluster();
+            }
+
+            if (score > 300 && enemies.length < (1 + Math.floor(score / 600))) {
+                if (Math.random() < 0.02) {
+                    enemies.push(new AbyssalJellyfish());
+                }
+            }
+        }
+
+        function spawnPlatformCluster() {
+            const topZoneThreshold = PLATFORM_MIN_Y + (PLATFORM_MAX_Y - PLATFORM_MIN_Y) * 0.4;
+            let currentMaxGap = MAX_PLATFORM_GAP;
+            if (lastPlatformY < topZoneThreshold) {
+                currentMaxGap = MAX_PLATFORM_GAP * 0.65;
+            } else {
+                currentMaxGap = MAX_PLATFORM_GAP * (1 + difficultyLevel * 0.1);
+            }
+            
+            const horizontalGap = 60 + Math.random() * (currentMaxGap - 80);
+            
+            let clusterY = PLATFORM_MIN_Y + Math.random() * (PLATFORM_MAX_Y - PLATFORM_MIN_Y);
+            let clusterX = rightmostX + horizontalGap;
+            let mainPlat = createPlatform(clusterX, clusterY);
+            platforms.push(mainPlat);
+            
+            if (Math.random() < 0.3 + difficultyLevel * 0.1) {
+                let yOffset = (70 + Math.random() * 80) * (Math.random() < 0.5 ? 1 : -1);
+                let secondY = mainPlat.y + yOffset;
+                secondY = Math.max(PLATFORM_MIN_Y, Math.min(secondY, PLATFORM_MAX_Y));
+                if (Math.abs(secondY - mainPlat.y) > 60) {
+                     let secondPlat = createPlatform(mainPlat.x + (Math.random() - 0.5) * 60, secondY);
+                     platforms.push(secondPlat);
+                }
+            }
+            lastPlatformY = mainPlat.y;
+            rightmostX = clusterX + mainPlat.width;
+        }
+
+        function createPlatform(platX, platY, isInitial = false) {
+            let platW = 120 + Math.random() * 130 - (difficultyLevel * 10);
+            platW = Math.max(70, platW);
+            const platH = 20;
+            
+            let currentType='normal_ceiling'; 
+            let visual = PLATFORM_VISUAL_THEMES[Math.floor(Math.random() * PLATFORM_VISUAL_THEMES.length)];
+            let platSpeed = isInitial ? 0 : (Math.random() - 0.5) * (scrollSpeed * 0.5 * (difficultyLevel / 2));
+
+            let platformData={x:platX,y:platY,width:platW,height:platH,visualTheme: visual, speed: platSpeed, static: platSpeed === 0, type:currentType,active:true, timer:1.33,reappearTime: 3.0, isRetracted: false, retractTimer: 0, maxRetractTime: 2.5 + Math.random(), retractedPercent: 0 };
+            
+            if (score > 150 && Math.random() < 0.15 + difficultyLevel * 0.1) {
+                let availableSpecials = SPECIAL_PLATFORM_TYPES.slice();
+                if (score < 800) availableSpecials = availableSpecials.filter(t => t!=='retracting_coral');
+                
+                let specialType = availableSpecials[Math.floor(Math.random() * availableSpecials.length)];
+                
+                const playableHeight = PLATFORM_MAX_Y - PLATFORM_MIN_Y;
+                if (specialType === 'bouncy_vent' && platY > PLATFORM_MIN_Y + (playableHeight * 0.2) ) {
+                    specialType = 'normal_ceiling';
+                }
+
+                platformData.type = specialType;
+                platformData.speed = 0;
+                platformData.static = true;
+                switch(platformData.type){ 
+                    case 'disappearing_coral': platformData.visualTheme = 'ancient_coral_shelf'; platformData.reappearTime = 5.0; break; 
+                    case 'bouncy_vent': platformData.visualTheme = 'rock_formation'; break; 
+                    case 'conveyor_current': platformData.visualTheme = 'rusted_shipwreck_panel'; platformData.direction = Math.random() < 0.5 ? 1 : -1; platformData.conveyorSpeed = (50 + Math.random()*30); break; 
+                    case 'retracting_coral': platformData.visualTheme = 'ancient_coral_shelf'; platformData.maxRetractTime = 3.0 + Math.random(); break; 
+                    case 'slippery_kelp_patch': platformData.visualTheme = 'dense_kelp_bed'; break; 
+                }
+            }
+
+            generatePlatformVisualDetails(platformData);
+            if (Math.random() < 0.65) { stars.push({x:platX + Math.random()*platW,y:platY+platH+20+Math.random()*40,radius:11,collected:false,bobOffset:Math.random()*Math.PI*2,bobSpeed:1.5+Math.random()*1.2});}
+            if (score > 400 && Math.random() < 0.08) { let puType = Math.random() < 0.4 ? 'shield_bubble' : 'propulsion_boost'; if (score > 1200 && Math.random() < 0.2) puType = 'extra_life'; powerUps.push(new PowerUp(platX + Math.random() * platW, platY + platH + 25 + Math.random() * 30, puType));}
+            return platformData;
+        }
+        
+        //================================================================
+        // 7. CORE UPDATE LOGIC
+        //================================================================
+
+        function update(dt) {
+            if (justRestartedFromGameOver && !keys[' ']) { justRestartedFromGameOver = false; }
+            switch (gameState) {
+                case 'start': if (keys[' ']) { attemptPlayMusicAndUnlockAudio(); playerCanMove = true; gameState = 'playing'; keys[' '] = false; updateUIVisibility(); } break;
+                case 'playing': if (keys['p'] || keys['Escape']) { gameState = 'paused'; keys['p'] = false; keys['Escape'] = false; playerCanMove = false; updateUIVisibility(); } updateAllGameObjects(dt); break;
+                case 'paused': break;
+                case 'transitioning': transitionAlpha += transitionSpeed * dt; if (transitionAlpha >= 1) { transitionAlpha = 1; if (transitionCallback) transitionCallback(); transitionSpeed *= -1; } else if (transitionAlpha <= 0 && transitionSpeed < 0) { transitionAlpha = 0; transitionSpeed = Math.abs(transitionSpeed); gameState = 'gameOver'; playerCanMove = false; updateUIVisibility(); } break;
+                case 'gameOver': if ((keys[' '] || keys['p'] || keys['Escape']) && !justRestartedFromGameOver) { attemptPlayMusicAndUnlockAudio(); resetGame(true); keys[' '] = false; keys['p'] = false; keys['Escape'] = false; justRestartedFromGameOver = true; } break;
+            }
+        }
+        
+        function updateAllGameObjects(dt) {
+            totalTimeElapsed += dt;
+            backgroundScrollX += scrollSpeed * dt;
+            gradientBaseHue = (gradientBaseHue + dt * 0.8) % 360;
+
+            if (gameState === 'playing') {
+                updatePlayer(dt);
+            }
+            manageWorldElements(dt);
+            updatePlatforms(dt);
+            updateStars(dt);
+            updatePowerUps(dt);
+            updateGameEffectParticles(dt);
+            bubbleLayers.forEach(layer => layer.forEach(b => b.update(dt)));
+            
+            scrollSpeed = 80 + (score / 150);
+            difficultyLevel = 1 + Math.floor(score / 400);
+        }
+        
+        function updatePlayer(dt) {
+            if (!playerCanMove || player.isDead) { player.vx = 0; return; }
+            
+            player.currentPushForce = PLAYER_BASE_PUSH_FORCE - (player.radius - player.baseRadius) * 18;
+            
+            let currentSpeed = PLAYER_MAX_SPEED;
+            if (player.speedBoost) { currentSpeed *= 1.7; player.speedBoostTimer -= dt; if (player.speedBoostTimer <= 0) player.speedBoost = false; }
+            
+            let currentHorizontalResistance = player.isAttached && player.attachedPlatform?.type === 'slippery_kelp_patch' ? DAMPING_H_SLIPPERY : DAMPING_H_NORMAL;
+            
+            if (keys.ArrowLeft) player.vx = Math.max(player.vx - PLAYER_HORIZONTAL_ACCEL * dt, -currentSpeed);
+            else if (keys.ArrowRight) player.vx = Math.min(player.vx + PLAYER_HORIZONTAL_ACCEL * dt, currentSpeed);
+            else player.vx *= (1 - currentHorizontalResistance * dt);
+            
+            player.x += player.vx * dt;
+
+            if (player.isAttached) {
+                const p = player.attachedPlatform;
+                player.x -= (scrollSpeed + p.speed) * dt;
+            }
+            
+            if (keys[' ']) {
+                if (player.isAttached) {
+                    player.vy = player.currentPushForce;
+                    if (player.attachedPlatform.type === 'retracting_coral' && !player.attachedPlatform.isRetracted) { player.attachedPlatform.isRetracted = true; player.attachedPlatform.active = false; player.attachedPlatform.retractTimer = player.attachedPlatform.maxRetractTime; playRetractPlatformSound(); }
+                    player.isAttached = false; player.attachedPlatform = null; playPushFromCeilingSound();
+                } else {
+                    for (const enemy of enemies) {
+                        if (enemy.type === 'jellyfish') { const dx = enemy.x - player.x; const dy = enemy.y - player.y; const dist = Math.sqrt(dx*dx + dy*dy); if (dist < player.radius + 60 && dist > 0) { const pushStrength = 480; enemy.pushForceX = (dx / dist) * pushStrength; enemy.pushForceY = (dy / dist) * pushStrength; enemy.pushedTimer = 0.25; enemy.speedX = 0; enemy.speedY = 0; playJellyfishPushedSound(); } }
+                    }
+                }
+                keys[' '] = false;
+            }
+
+            if (!player.isAttached) {
+                player.vy += BUOYANCY * dt;
+                for (const platform of platforms) {
+                    if (!platform.active) continue;
+                    if (player.x + player.radius*0.8 > platform.x && player.x - player.radius*0.8 < platform.x + platform.width) {
+                        if (player.vy <= 10 && player.y-player.radius > platform.y+platform.height-30 && player.y-player.radius < platform.y+platform.height+5) {
+                            if (player.y - player.radius <= platform.y + platform.height + 2 && (player.y - player.radius - (player.vy*dt)) > platform.y + platform.height - 2) {
+                                player.y = platform.y + platform.height + player.radius; player.vy = 0; player.isAttached = true; player.attachedPlatform = platform; playAttachToCeilingSound();
+                                if (platform.type === 'bouncy_vent') { player.vy = player.currentPushForce * 1.7; player.isAttached = false; player.attachedPlatform = null; playBouncyVentSound(); } 
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            player.vy *= (1 - DAMPING_V * dt); player.y += player.vy * dt;
+
+            if (player.y - player.radius < CAVE_CEILING_Y && player.canTakeDamage) { playerDie("hit_ceiling"); player.vy = 50; }
+            if (player.y + player.radius > CAVE_FLOOR_Y && player.canTakeDamage) { playerDie("hit_floor"); player.vy = -50; }
+
+            if (player.isAttached && player.attachedPlatform) {
+                const p = player.attachedPlatform;
+                if (!p.active || (p.x + p.width < player.x - player.radius*0.7) || (p.x > player.x + player.radius*0.7) ) { player.isAttached = false; player.attachedPlatform = null; } 
+                else {
+                    if (p.type === 'conveyor_current') { player.x += p.conveyorSpeed * p.direction * dt; }
+                    player.y = p.y + p.height + player.radius;
+                }
+            }
+            player.x = Math.max(player.radius, Math.min(player.x, TARGET_CANVAS_WIDTH - player.radius));
+
+            if (player.invincibleTimer > 0) { player.invincibleTimer -= dt; if (player.invincibleTimer <= 0) { player.invincible = false; player.canTakeDamage = true; } }
+            
+            for (let i = stars.length - 1; i >= 0; i--) { const gem = stars[i]; if (!gem.collected) { const dx = player.x - gem.x; const dy = player.y - (gem.y + Math.sin(gem.bobOffset+totalTimeElapsed*gem.bobSpeed)*3); if (Math.sqrt(dx * dx + dy * dy) < player.radius + gem.radius) { gem.collected = true; score += 20; player.radius = Math.min(player.maxRadius, player.radius + player.radiusGrowthPerStar); playGemSound(); } } }
+            for (let i = powerUps.length - 1; i >= 0; i--) { const pu = powerUps[i]; if (!pu.collected) { const puDrawY = pu.y + Math.sin(pu.animationTimer) * 6; const dx = player.x - pu.x; const dy = player.y - puDrawY; if (Math.sqrt(dx * dx + dy * dy) < player.radius + pu.radius) { pu.collected = true; playPowerUpSound(pu.type); if (pu.type === 'shield_bubble') { player.invincible = true; player.invincibleTimer = 5.0; } else if (pu.type === 'propulsion_boost') { player.speedBoost = true; player.speedBoostTimer = 5.0; } else if (pu.type === 'extra_life') { player.lives++; } powerUps.splice(i, 1); } } }
+            for (const enemy of enemies) { if (enemy.type === 'jellyfish') { const enemyDrawY = enemy.y + Math.sin(enemy.bobOffset * 1.5) * 4; const dx = player.x - enemy.x; const dy = player.y - enemyDrawY; const dist = Math.sqrt(dx*dx+dy*dy); if (dist < player.radius + enemy.radius * 0.8 && enemy.pushedTimer <=0) { if (player.canTakeDamage) { playerDie("hit_jelly"); playJellyfishBounceSound(); player.vy = (dy / dist) * 200; player.vx = (dx/dist) * 200; } } } }
+        }
+
+        function updatePlatforms(dt){ for(let i=platforms.length-1; i>=0; i--){ const p=platforms[i]; if(p.type==='disappearing_coral'&&p.active){ if(player.isAttached&&player.attachedPlatform===p){p.timer-=dt;}if(p.timer<=0){p.active=false;if(player.isAttached&&player.attachedPlatform===p){player.isAttached=false;player.attachedPlatform=null; player.vy = 0;}setTimeout(()=>{p.active=true;p.timer=1.33;},p.reappearTime * 1000);}} if (p.type === 'retracting_coral' && p.isRetracted) { p.retractTimer-=dt; p.retractedPercent = 1 - (p.retractTimer / p.maxRetractTime); p.retractedPercent = Math.max(0, Math.min(1, p.retractedPercent)); if (p.retractTimer <= 0) { p.isRetracted = false; p.active = true; p.retractedPercent = 0; } } } }
+        function updateStars(dt){ stars.forEach(star=>{if(!star.collected){star.bobOffset+=star.bobSpeed*dt;}})}
+        function updatePowerUps(dt){ powerUps.forEach(pu => { if(!pu.collected) pu.update(dt);})} 
+        function updateGameEffectParticles(dt){ for(let i=gameEffectParticles.length-1;i>=0;i--){gameEffectParticles[i].update(dt);if(gameEffectParticles[i].lifetime<=0||gameEffectParticles[i].size<=0.1){gameEffectParticles.splice(i,1);}}}
+        
+        function playerDie(reason="unknown"){ if(player.invincible || player.isDead) return; player.isDead = true; emitPlayerDeathBubbles(); playLifeLostSound(); setTimeout(() => { player.lives--; if(player.lives<=0){ gameOverFinalScore=score; if(score>highScore){highScore=score;localStorage.setItem('abyssalRunnerHighScore_v9',highScore);} playerCanMove=false; gameState='transitioning'; transitionCallback=()=>{gameState='gameOver';playGameOverSound();updateUIVisibility();}; }else{ player.x=150; player.y=CAVE_FLOOR_Y-40; player.vx=0; player.vy=0; player.isAttached=false; player.attachedPlatform=null; player.invincible=true; player.invincibleTimer=2.0; player.radius=player.baseRadius; player.currentPushForce=PLAYER_BASE_PUSH_FORCE; player.isDead = false; } }, 1500); }
+        
+        //================================================================
+        // 8. CORE DRAWING LOGIC
+        //================================================================
+        function draw(){ 
+            ctx.clearRect(0,0,TARGET_CANVAS_WIDTH,TARGET_CANVAS_HEIGHT); 
+            drawBackground(); 
+            drawScrollingAbyssLayers(true);
+            drawEdgeGradients();
+            
+            if(gameState==='start'){ drawStartScreen(); } 
+            else if(gameState==='playing'||gameState==='transitioning'){ drawGameElements(); } 
+            else if(gameState==='gameOver'){ drawGameOverScreen(); } 
+            else if(gameState==='paused') { drawGameElements(); drawPausedScreen(); }
+            
+            drawScrollingAbyssLayers(false);
+            
+            drawUI();
+
+            if(gameState==='transitioning'){ drawTransitionOverlay(); } 
+        }
+
+        function drawGameElements(){ 
+            bubbleLayers.forEach(layer => layer.forEach(b => b.draw(ctx))); 
+            for(const p of platforms){if(p.active || (p.type === 'retracting_coral' && p.isRetracted) ) drawPlatform(p); } 
+            for(const gem of stars){if(!gem.collected)drawGem(gem.x,gem.y+Math.sin(gem.bobOffset+totalTimeElapsed*gem.bobSpeed)*3,gem.radius,gem.scale);} 
+            for(const pu of powerUps){if(pu && typeof pu.draw === 'function') pu.draw(ctx);} 
+            enemies.forEach(e => e.draw(ctx));
+            
+            if (!player.isDead) {
+                let pC1='#70C1FF',pC2='#2A7AB0'; 
+                if(player.speedBoost && Math.floor(player.speedBoostTimer * 10) % 2 === 0) { pC1='hsl(120, 70%, 75%)';pC2='hsl(140, 70%, 55%)'; } 
+                else if(player.invincibleTimer>0&&Math.floor(player.invincibleTimer*10)%2===0){ pC1='hsl(50, 100%, 85%)';pC2='hsl(45, 100%, 65%)'; } 
+                drawCircleWithGradient(player.x,player.y,player.radius,pC1,pC2,player.scale); 
+                if(player.isAttached&&player.attachedPlatform){ ctx.strokeStyle='rgba(220,240,255,0.4)';ctx.lineWidth=player.radius*0.12;ctx.beginPath();ctx.moveTo(player.x,player.y-player.radius);ctx.lineTo(player.x,player.attachedPlatform.y+player.attachedPlatform.height);ctx.stroke(); } 
+                else{ ctx.fillStyle='rgba(220,240,255,0.15)';ctx.beginPath();ctx.arc(player.x-player.radius*0.35,player.y-player.radius*0.35,player.radius*0.2,0,Math.PI*2);ctx.fill();} 
+            }
+            
+            for(const p of gameEffectParticles){if(p&&typeof p.draw==='function')p.draw(ctx);} 
+        }
+        
+        function drawUI() {
+            if (gameState === 'start') return;
+            let text;
+            if (gameState === 'gameOver') {
+                text = `Final Score: ${gameOverFinalScore} | High Score: ${highScore}`;
+            } else {
+                text = `Score: ${score} | Lives: ${player.lives}`;
+            }
+            ctx.fillStyle='white';ctx.strokeStyle='black';ctx.lineWidth=3;ctx.font='bold 19px Arial';ctx.textAlign='left';
+            ctx.strokeText(text,10,30);
+            ctx.fillText(text,10,30);
+        }
+
+        function drawStartScreen(){ bubbleLayers.forEach(layer => layer.forEach(b => b.draw(ctx))); drawScreenMessage("ABYSSAL RUNNER","Press PUSH to Start the Run",'#A7FFEB','white',48,22); ctx.font='bold 16px Arial';ctx.lineWidth=2;ctx.fillStyle='white';ctx.strokeStyle='black'; ctx.textAlign='center'; ctx.strokeText("Arrow Keys/Buttons: Move Left & Right",TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+55); ctx.fillText("Arrow Keys/Buttons: Move Left & Right",TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+55); ctx.strokeText("SPACE/Button: PUSH off ceilings to float upwards",TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+80); ctx.fillText("SPACE/Button: PUSH off ceilings to float upwards",TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+80); ctx.strokeText("Avoid the cave walls and collect items!",TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+105); ctx.fillText("Avoid the cave walls and collect items!",TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+105); }
+        function drawGameOverScreen(){ bubbleLayers.forEach(layer => layer.forEach(b => b.draw(ctx))); drawScreenMessage("RUN OVER", "", '#FF8A80','white',48,28); ctx.font='bold 22px Arial';ctx.fillStyle='white';ctx.strokeStyle='black';ctx.lineWidth=3;ctx.textAlign='center'; ctx.strokeText('Press PUSH to Try Again',TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+105); ctx.fillText('Press PUSH to Try Again',TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+105); }
+        function drawPausedScreen() { ctx.fillStyle = 'rgba(0, 0, 0, 0.5)'; ctx.fillRect(0, 0, TARGET_CANVAS_WIDTH, TARGET_CANVAS_HEIGHT); drawScreenMessage("PAUSED", "", '#FFEB3B', 'white', 60, 20); }
+        function drawTransitionOverlay(){ ctx.fillStyle=`rgba(0,5,10,${transitionAlpha})`;ctx.fillRect(0,0,TARGET_CANVAS_WIDTH,TARGET_CANVAS_HEIGHT);}
+        function drawScreenMessage(title,msg,tc,mc,ts,ms){ ctx.fillStyle=tc;ctx.strokeStyle='black';ctx.lineWidth=4;ctx.font=`bold ${ts}px Arial`;ctx.textAlign='center';ctx.strokeText(title,TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2-25);ctx.fillText(title,TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2-25);if(msg){ctx.fillStyle=mc;ctx.font=`bold ${ms}px Arial`;ctx.lineWidth=3;ctx.strokeText(msg,TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+25);ctx.fillText(msg,TARGET_CANVAS_WIDTH/2,TARGET_CANVAS_HEIGHT/2+25);}}
+        function emitParticles(x,y,type){ let numP,clr,minS,maxS,minVx,maxVx,minVy,maxVy,life; switch(type){ case 'gem_shine':numP=6;clr='rgba(200,255,255,0.9)';minS=2;maxS=5;minVx=-90;maxVx=90;minVy=-90;maxVy=90;life=0.58;break; case 'attach_clink':numP=4;clr='rgba(160,160,160,0.5)';minS=3;maxS=6;minVx=-30;maxVx=30;minVy=6;maxVy=24;life=0.41;break; case 'push_down_burst':numP=8;clr='rgba(130,180,235,0.65)';minS=4;maxS=8;minVx=-72;maxVx=72;minVy=150;maxVy=270;life=0.67;break; case 'geyser_burst':numP=12;clr='rgba(180,235,210,0.75)';minS=5;maxS=10;minVx=-90;maxVx=90;minVy=180;maxVy=330;life=0.75;break; default:return;} for(let i=0;i<numP;i++){gameEffectParticles.push(new GameEffectParticle(x,y,type,clr,minS+Math.random()*(maxS-minS),minVx+Math.random()*(maxVx-minVx),minVy+Math.random()*(maxVy-minVy),life));}}
+        function emitPlayerDeathBubbles() { for (let i = 0; i < 25; i++) { const size = player.radius * (0.2 + Math.random() * 0.8); gameEffectParticles.push(new GameEffectParticle( player.x, player.y, 'death_bubble', `rgba(170, 220, 255, ${0.5 + Math.random() * 0.5})`, size, (Math.random() - 0.5) * 120, (Math.random() - 0.5) * 120, 1.0 + Math.random() * 0.5 )); } }
+
+        //================================================================
+        // 9. DRAWING HELPERS & MISC
+        //================================================================
+        function drawCircleWithGradient(x,y,r,c1,c2,s=1){ ctx.beginPath();const gr=ctx.createRadialGradient(x,y,0,x,y,r*s);gr.addColorStop(0,c1);gr.addColorStop(1,c2);ctx.fillStyle=gr;ctx.arc(x,y,r*s,0,Math.PI*2);ctx.fill();ctx.strokeStyle='rgba(0,0,0,0.4)';ctx.lineWidth=1.5;ctx.stroke();}
+        function drawPlatform(platform){ let {x,y,width,height, type, visualTheme, visualDetails, retractedPercent = 0} = platform; ctx.save(); let effectiveW = width * (1 - retractedPercent * 0.5); let effectiveH = height * (1 - retractedPercent); let effectiveX = x + (width - effectiveW) / 2; if (effectiveH < 1 && type === 'retracting_coral') { ctx.restore(); return; } let cornerRad = PLATFORM_CORNER_RADIUS; let baseC1, baseC2; switch(type) { case 'bouncy_vent': baseC1 = 'hsl(160, 50%, 75%)'; baseC2 = 'hsl(170, 70%, 45%)'; visualTheme = 'rock_formation'; break; default: switch(visualTheme) { case 'rock_formation': baseC1 = 'hsl(210, 10%, 35%)'; baseC2 = 'hsl(210, 10%, 25%)'; break; case 'ancient_coral_shelf': baseC1 = 'hsl(10, 50%, 60%)'; baseC2 = 'hsl(5, 60%, 45%)'; cornerRad = 15; break; case 'dense_kelp_bed': baseC1 = 'hsl(125, 35%, 25%)'; baseC2 = 'hsl(125, 40%, 18%)'; break; case 'sunken_driftwood': baseC1 = 'hsl(30, 20%, 35%)'; baseC2 = 'hsl(30, 20%, 22%)'; cornerRad = 5; break; case 'rusted_shipwreck_panel': baseC1 = 'hsl(200, 12%, 40%)'; baseC2 = 'hsl(200, 8%, 28%)'; cornerRad = 2; break; case 'industrial_grate': baseC1 = 'hsl(210, 7%, 30%)'; baseC2 = 'hsl(210, 8%, 18%)'; cornerRad = 2; break; default: baseC1 = 'hsl(210, 10%, 35%)'; baseC2 = 'hsl(210, 10%, 25%)'; }} drawPlatformCeiling_Base(effectiveX,y,effectiveW,effectiveH, baseC1, baseC2, cornerRad); if (visualDetails) { switch(visualTheme) { case 'rock_formation': if (effectiveH > 5 && visualDetails.cracks) { ctx.strokeStyle = 'rgba(0,0,0,0.25)'; ctx.lineWidth = 1.5; visualDetails.cracks.forEach(crack => { ctx.beginPath(); ctx.moveTo(effectiveX + crack.x1 * effectiveW, y + crack.y1 * effectiveH); ctx.lineTo(effectiveX + crack.x2 * effectiveW, y + crack.y2 * effectiveH); ctx.stroke(); }); } break; case 'ancient_coral_shelf': if (effectiveH > 3 && visualDetails.bumps) { visualDetails.bumps.forEach(bump => { ctx.fillStyle = bump.c; let r = bump.r * (1-retractedPercent*0.8); if (r > 1) { ctx.beginPath(); ctx.arc(effectiveX + bump.x * effectiveW, y + effectiveH - r * bump.yAnchor, r, 0, Math.PI*2); ctx.fill(); } }); } break; case 'dense_kelp_bed':  if (effectiveH > 10 && visualDetails.kelpStrands) { ctx.strokeStyle = `hsla(120, 30%, 30%, 0.6)`; ctx.lineWidth = Math.max(1, 3 * (1-retractedPercent*0.5)); visualDetails.kelpStrands.forEach(strand => { let kxAnimated = effectiveX + strand.startXOffset + Math.sin(totalTimeElapsed * 0.4 + strand.phase) * 3; let kelpLength = strand.baseLength * (1-retractedPercent*0.7); if (kelpLength < 5) return; ctx.beginPath(); ctx.moveTo(kxAnimated, y + effectiveH); ctx.quadraticCurveTo(kxAnimated + Math.sin(totalTimeElapsed*0.2 + strand.phase)*2, y + effectiveH + kelpLength / 2, kxAnimated + Math.sin(totalTimeElapsed*0.3 + strand.phase*1.5)*4, y + effectiveH + kelpLength); ctx.stroke(); }); } break; case 'sunken_driftwood': if (effectiveH > 5 && effectiveW > 10 && visualDetails.grains) { ctx.strokeStyle = 'rgba(0,0,0,0.15)'; ctx.lineWidth = 1; visualDetails.grains.forEach(grain => { ctx.beginPath(); ctx.moveTo(effectiveX, y + grain.startY * effectiveH); ctx.bezierCurveTo(effectiveX+effectiveW*0.3, y + grain.startY * effectiveH + grain.c1y, effectiveX+effectiveW*0.7, y + grain.startY * effectiveH + grain.c2y, effectiveX+effectiveW, y + grain.startY * effectiveH); ctx.stroke(); }); } break; case 'rusted_shipwreck_panel': if (effectiveH > 8 && effectiveW > 20 && visualDetails.rivets) { ctx.fillStyle = 'rgba(0,0,0,0.35)'; visualDetails.rivets.forEach(rivet => { let rivetSize = rivet.s * (1-retractedPercent*0.7); if (rivetSize < 0.5) return; ctx.beginPath(); ctx.arc(effectiveX + rivet.x * effectiveW, y + rivet.y * effectiveH, rivetSize,0,Math.PI*2); ctx.fill(); }); } break; case 'industrial_grate': if (effectiveH > 5 && visualDetails.teeth) { ctx.fillStyle = baseC2; visualDetails.teeth.forEach(tooth => { let currentToothWidth = tooth.w; let currentToothHeight = tooth.h; ctx.fillRect(effectiveX + tooth.normX * effectiveW - currentToothWidth/2, y + effectiveH, currentToothWidth, currentToothHeight); }); } break; } } if (type === 'bouncy_vent') { ctx.fillStyle = 'rgba(160, 210, 190, 0.5)'; let ventSize = Math.min(effectiveW, effectiveH) * 0.4; ctx.beginPath(); ctx.ellipse(effectiveX + effectiveW/2, y + effectiveH*0.5, ventSize, ventSize*0.6, 0, 0, Math.PI*2); ctx.fill(); } else if (type === 'conveyor_current' && effectiveW > 20) { ctx.fillStyle = 'rgba(190, 170, 60, 0.6)'; let arrowSize = 10; for (let i=0; i < effectiveW/30; i++) { ctx.beginPath(); let ax = effectiveX + 15 + i*30; if(ax > effectiveX + effectiveW - arrowSize - 5) continue; if (platform.direction > 0) { ctx.moveTo(ax - arrowSize, y + effectiveH/2 - arrowSize/2); ctx.lineTo(ax, y + effectiveH/2); ctx.lineTo(ax - arrowSize, y + effectiveH/2 + arrowSize/2); } else { ctx.moveTo(ax + arrowSize, y + effectiveH/2 - arrowSize/2); ctx.lineTo(ax, y + effectiveH/2); ctx.lineTo(ax + arrowSize, y + effectiveH/2 + arrowSize/2); } ctx.fill(); } } ctx.restore(); }
+        function drawPlatformCeiling_Base(x,y,w,h,c1,c2,cornerRadius){ if (w < 1 || h < 1) return; ctx.beginPath(); const grad=ctx.createRadialGradient(x+w/2,y+h/2,0,x+w/2,y+h/2,Math.max(w,h)*0.7); grad.addColorStop(0,c1);grad.addColorStop(1,c2);ctx.fillStyle=grad; if(typeof ctx.roundRect==='function'){ctx.roundRect(x,y,w,h,[cornerRadius]);ctx.fill();ctx.strokeStyle='rgba(0,0,0,0.5)';ctx.lineWidth=2;ctx.stroke();} else{ctx.fillRect(x,y,w,h);ctx.strokeRect(x,y,w,h);} }
+        function generatePlatformVisualDetails(platform) { platform.visualDetails = {}; const { width, height, visualTheme } = platform; switch(visualTheme) { case 'rock_formation': platform.visualDetails.cracks = []; for(let i=0; i < 2 + width/60; i++){ platform.visualDetails.cracks.push({ x1: Math.random(), y1: Math.random(), x2: Math.random(), y2: Math.random() }); } break; case 'ancient_coral_shelf': platform.visualDetails.bumps = []; for(let i=0; i < 3 + width/40; i++){ platform.visualDetails.bumps.push({ c: Math.random() < 0.5 ? 'hsl(10, 50%, 60%)' : 'hsl(5, 60%, 45%)', r: (2 + Math.random()*4), x: Math.random(), yAnchor: 0.1 + Math.random() * 0.8 }); } break; case 'dense_kelp_bed': platform.visualDetails.kelpStrands = []; const numKelp = Math.floor(width/10); const spacing = width / (numKelp + 1); for(let i=0; i<numKelp; i++) { platform.visualDetails.kelpStrands.push({ startXOffset: (i+1) * spacing, phase: Math.random()*Math.PI*2, baseLength: 20 + Math.random()*15}); } break; case 'sunken_driftwood': platform.visualDetails.grains = []; for(let i=0; i < height/4; i++){ platform.visualDetails.grains.push({ startY: (i*4+2)/height, c1y: (Math.random()-0.5)*4, c2y: (Math.random()-0.5)*4 }); } break; case 'rusted_shipwreck_panel': platform.visualDetails.rivets = []; for(let i=0; i < width/25; i++){ platform.visualDetails.rivets.push({ x: (5+i*25)/width, y: (height-5)/height, s:2 }); platform.visualDetails.rivets.push({ x: (5+i*25)/width, y: 5/height, s:2 }); } break; case 'industrial_grate': platform.visualDetails.teeth = []; let toothWidth = 10; let toothHeight = 6; let numTeeth = Math.floor(width / (toothWidth + 4)); if (numTeeth > 0) { let totalTeethWidth = numTeeth * (toothWidth + 4) - 4; let startOffset = (width - totalTeethWidth) / 2; for (let i = 0; i < numTeeth; i++) { platform.visualDetails.teeth.push({ normX: (startOffset + i * (toothWidth + 4) + toothWidth/2) / width, w: toothWidth, h: toothHeight }); } } break; } }
+        function drawGem(x,y,r,s=1){ drawCircleWithGradient(x,y,r,'rgba(100,220,255,0.95)','rgba(50,150,200,0.75)',s);ctx.fillStyle='rgba(220,255,255,0.85)';ctx.beginPath();ctx.arc(x-r*0.3*s,y-r*0.3*s,r*0.25*s,0,Math.PI*2);ctx.fill();}
+        
+        function generateBackgrounds() {
+            abyssBackgroundLayers = [];
+            const layerColors = ['#2a3a4a', '#1c2833', '#0e1419'];
+            for (let i = 0; i < layerColors.length; i++) {
+                const isForeground = i === layerColors.length - 1;
+                const pathWidth = TARGET_CANVAS_WIDTH * 2;
+                const segmentWidth = 120 + i * 20;
+                let roughness, baseCeilingY, baseFloorY;
+
+                if (isForeground) {
+                    roughness = 15;
+                    baseCeilingY = CAVE_CEILING_Y;
+                    baseFloorY = CAVE_FLOOR_Y;
+                } else {
+                    roughness = 50 + i * 20;
+                    baseCeilingY = 120 - i * 30; 
+                    baseFloorY = TARGET_CANVAS_HEIGHT - 120 + i * 30;
+                }
+
+                let ceilingPath = new Path2D(), floorPath = new Path2D();
+                
+                let lastY_c = baseCeilingY + (Math.random() - 0.5) * roughness;
+                ceilingPath.moveTo(0, lastY_c);
+                for (let x = segmentWidth; x < pathWidth; x += segmentWidth) { let nextY = baseCeilingY + (Math.random() - 0.5) * roughness; ceilingPath.bezierCurveTo(x - segmentWidth/2, lastY_c, x - segmentWidth/2, nextY, x, nextY); lastY_c = nextY; }
+                ceilingPath.lineTo(pathWidth, lastY_c); ceilingPath.lineTo(pathWidth, 0); ceilingPath.lineTo(0, 0); ceilingPath.closePath();
+                
+                let lastY_f = baseFloorY - (Math.random() - 0.5) * roughness;
+                floorPath.moveTo(0, lastY_f);
+                for (let x = segmentWidth; x < pathWidth; x += segmentWidth) { let nextY = baseFloorY - (Math.random() - 0.5) * roughness; floorPath.bezierCurveTo(x - segmentWidth/2, lastY_f, x - segmentWidth/2, nextY, x, nextY); lastY_f = nextY; }
+                floorPath.lineTo(pathWidth, lastY_f); floorPath.lineTo(pathWidth, TARGET_CANVAS_HEIGHT); floorPath.lineTo(0, TARGET_CANVAS_HEIGHT); floorPath.closePath();
+                
+                abyssBackgroundLayers.push({
+                    ceilingPath: ceilingPath, floorPath: floorPath, color: layerColors[i],
+                    scrollFactor: 0.2 + i * 0.3,
+                    width: pathWidth,
+                    isForeground: isForeground
+                });
+            }
+        }
+        
+        function drawBackground() {
+            const grad = ctx.createLinearGradient(0, 0, 0, TARGET_CANVAS_HEIGHT);
+            grad.addColorStop(0, `hsl(${gradientBaseHue}, 25%, 30%)`);
+            grad.addColorStop(0.5, `hsl(${gradientBaseHue}, 35%, 38%)`);
+            grad.addColorStop(1, `hsl(${gradientBaseHue}, 25%, 30%)`);
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, TARGET_CANVAS_WIDTH, TARGET_CANVAS_HEIGHT);
+        }
+
+        function drawEdgeGradients() {
+            const topGrad = ctx.createLinearGradient(0, 0, 0, TARGET_CANVAS_HEIGHT / 2);
+            topGrad.addColorStop(0, `hsla(${gradientBaseHue}, 15%, 8%, 0.7)`);
+            topGrad.addColorStop(1, `hsla(${gradientBaseHue}, 15%, 8%, 0)`);
+            ctx.fillStyle = topGrad;
+            ctx.fillRect(0, 0, TARGET_CANVAS_WIDTH, TARGET_CANVAS_HEIGHT / 2);
+
+            const botGrad = ctx.createLinearGradient(0, TARGET_CANVAS_HEIGHT, 0, TARGET_CANVAS_HEIGHT / 2);
+            botGrad.addColorStop(0, `hsla(${gradientBaseHue}, 15%, 8%, 0.7)`);
+            botGrad.addColorStop(1, `hsla(${gradientBaseHue}, 15%, 8%, 0)`);
+            ctx.fillStyle = botGrad;
+            ctx.fillRect(0, TARGET_CANVAS_HEIGHT / 2, TARGET_CANVAS_WIDTH, TARGET_CANVAS_HEIGHT / 2);
+        }
+
+        function drawScrollingAbyssLayers(isBackground) {
+            for (let i = 0; i < abyssBackgroundLayers.length; i++) {
+                const layer = abyssBackgroundLayers[i];
+                if ((isBackground && layer.isForeground) || (!isBackground && !layer.isForeground)) {
+                    continue;
+                }
+                const currentScrollX = (backgroundScrollX * layer.scrollFactor) % layer.width;
+                ctx.fillStyle = layer.color;
+                ctx.save();
+                ctx.translate(-currentScrollX, 0);
+                if (isBackground) {
+                    ctx.fill(layer.ceilingPath); ctx.fill(layer.floorPath);
+                    ctx.translate(layer.width, 0);
+                    ctx.fill(layer.ceilingPath); ctx.fill(layer.floorPath);
+                } else {
+                    ctx.fillRect(0, 0, layer.width * 2, CAVE_CEILING_Y);
+                    ctx.fillRect(0, CAVE_FLOOR_Y, layer.width * 2, TARGET_CANVAS_HEIGHT - CAVE_FLOOR_Y);
+                }
+                ctx.restore();
+            }
+        }
+
+        function setupAmbientEffects() { 
+            bubbleLayers = []; 
+            const layerFactors = [0.4, 0.7, 1.0];
+            const bubblesPerLayer = [25, 20, 15];
+            for (let i = 0; i < layerFactors.length; i++) {
+                let layer = [];
+                for(let j = 0; j < bubblesPerLayer[i]; j++) {
+                    layer.push(new AmbientBubble(layerFactors[i]));
+                }
+                bubbleLayers.push(layer);
+            }
+        }
+
+        function updateUIVisibility(){ 
+            const showMobile = isAndroid && (gameState==='start'||gameState==='playing'||gameState==='gameOver');
+            if (mobileControls) { mobileControls.style.display = showMobile ? 'flex' : 'none'; } 
+            
+            if(gameState==='playing'){ 
+                if(topRightControls) topRightControls.style.display='block'; 
+                if(pauseMenu) pauseMenu.style.display='none'; 
+            } else if(gameState==='paused'){ 
+                if(topRightControls) topRightControls.style.display='none'; 
+                if(pauseMenu) pauseMenu.style.display='flex'; 
+            } else { 
+                if(topRightControls) topRightControls.style.display='none'; 
+                if(pauseMenu) pauseMenu.style.display='none'; 
+            }
+        }
+
+        //================================================================
+        // 10. MAIN GAME LOOP
+        //================================================================
+        function gameLoop(timestamp){
+            const deltaTime = (timestamp - (lastTime || timestamp)) / 1000;
+            lastTime = timestamp;
+            const cappedDeltaTime = Math.min(deltaTime, 0.1); 
+            
+            if(gameState !== 'paused') {
+                update(cappedDeltaTime);
+            }
+            draw();
+            
+            requestAnimationFrame(gameLoop);
+        }
+        
+        //================================================================
+        // 11. START GAME
+        //================================================================
+        initRun();
+        gameState = 'start';
+        playerCanMove = false;
+        setupEventListeners(); 
+        updateUIVisibility();
+        requestAnimationFrame(gameLoop);
+
+    })();
+    </script>
+</body>
+</html>
