@@ -81,3 +81,7 @@ Distributed under the MIT License. See `LICENSE.md` for more information.
 <div align="left">
   <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/tin2tin/Reach_for_the_Air/master/index_sideways.html">PLAY</a><br><br>
 </div>
+
+<div align="left">
+  <a href="https://htmlpreview.github.io/?https://raw.githubusercontent.com/tin2tin/Reach_for_the_Air/master/connect_4.html">Connect 4</a><br><br>
+</div>
