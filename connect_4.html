@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tænk Dig Om - Neon Reflektion v5 (Kompatibel)</title>
+    <title>Tænk Dig Om - Neon Reflektion v6 (Robust)</title>
     <style>
         body, html {
             margin: 0;
@@ -95,16 +95,7 @@
         function updateStatus(msg){document.getElementById('status').innerHTML=msg;}
 
         // ----- 3D SETUP OG RENDERING -----
-        function createGridTexture() {
-            const canvas = document.createElement('canvas');canvas.width = 256;canvas.height = 256;
-            const context = canvas.getContext('2d');context.strokeStyle = 'rgba(0, 255, 255, 0.5)';context.lineWidth = 2;
-            for (let i = 1; i < BOARD_SIZE; i++) {
-                const pos = i * (canvas.width / BOARD_SIZE);
-                context.beginPath();context.moveTo(pos, 0); context.lineTo(pos, canvas.height);context.stroke();
-                context.beginPath();context.moveTo(0, pos); context.lineTo(canvas.width, pos);context.stroke();
-            }
-            return new THREE.CanvasTexture(canvas);
-        }
+        function createGridTexture(){const c=document.createElement('canvas');c.width=256;c.height=256;const t=c.getContext('2d');t.strokeStyle='rgba(0,255,255,0.5)';t.lineWidth=2;for(let i=1;i<BOARD_SIZE;i++){const p=i*(c.width/BOARD_SIZE);t.beginPath();t.moveTo(p,0);t.lineTo(p,c.height);t.stroke();t.beginPath();t.moveTo(0,p);t.lineTo(c.width,p);t.stroke();}return new THREE.CanvasTexture(c);}
 
         function init3D() {
             scene=new THREE.Scene();scene.background=new THREE.Color(0x000000);scene.fog=new THREE.FogExp2(0x001111,0.025);
@@ -113,7 +104,7 @@
             controls=new THREE.OrbitControls(camera,renderer.domElement);controls.enableDamping=true;controls.minDistance=8;controls.maxDistance=25;
             cubeRenderTarget=new THREE.WebGLCubeRenderTarget(256);cubeRenderTarget.texture.encoding=THREE.sRGBEncoding;cubeCamera=new THREE.CubeCamera(1,1000,cubeRenderTarget);
             new THREE.RGBELoader().load('https://dl.polyhaven.org/asset_img/primary/neutral_photo_studio.hdr',t=>{t.mapping=THREE.EquirectangularReflectionMapping;scene.environment=t;});
-            const sphereGeo=new THREE.SphereGeometry(100,64,64);const sphereMat=new THREE.MeshStandardMaterial({envMap:cubeRenderTarget.texture,metalness:1.0,roughness:0.05,side:THREE.BackSide});reflectionSphere=new THREE.Mesh(sphereGeo,sphereMat);scene.add(reflectionSphere);
+            const sG=new THREE.SphereGeometry(100,64,64);const sM=new THREE.MeshStandardMaterial({envMap:cubeRenderTarget.texture,metalness:1.0,roughness:0.05,side:THREE.BackSide});reflectionSphere=new THREE.Mesh(sG,sM);scene.add(reflectionSphere);
             const rP={metalness:0.95,roughness:0.15};
             player1Material=new THREE.MeshStandardMaterial({color:0xff0000,emissive:0xcc0000,emissiveIntensity:0.6,...rP});
             player2Material=new THREE.MeshStandardMaterial({color:0x00ffff,emissive:0x00cccc,emissiveIntensity:0.6,...rP});
@@ -125,29 +116,14 @@
             const offset=(4*1.2+(4-1)*0.2)/2-1.2/2;
             for(let z=0;z<4;z++)for(let y=0;y<4;y++)for(let x=0;x<4;x++){const pos={x:x*(1.2+0.2)-offset,y:y*(1.2+0.2)-offset,z:z*(1.2+0.2)-offset};const key=`${x}-${y}-${z}`;const cM=new THREE.Mesh(new THREE.BoxGeometry(1.2,1.2,1.2),hoverMaterial.clone());cM.position.set(pos.x,pos.y,pos.z);cM.userData={x,y,z};cM.visible=false;boardGroup.add(cM);cellMeshes[key]=cM;const p1=player1Geometry.clone();p1.children.forEach(c=>c.material=player1Material);const p2=player2Geometry.clone();p2.children.forEach(c=>c.material=player2Material);const pG=new THREE.Group();pG.add(p1,p2);pG.position.set(pos.x,pos.y,pos.z);pG.visible=false;boardGroup.add(pG);pieceGroups[key]=pG;}
             previewPiece=player1Geometry.clone();previewPiece.children.forEach(c=>c.material=player1PreviewMaterial);previewPiece.visible=false;scene.add(previewPiece);
-            const gridTexture = createGridTexture();
-            const boxSize = (BOARD_SIZE * 1.2) + ((BOARD_SIZE - 1) * 0.2);
-            const gridGeo = new THREE.BoxGeometry(boxSize, boxSize, boxSize);
-            const gridMat = new THREE.MeshBasicMaterial({ map: gridTexture, transparent: true, opacity: 0.3, side: THREE.BackSide });
-            const gridBox = new THREE.Mesh(gridGeo, gridMat);
-            boardGroup.add(gridBox);
+            const gT=createGridTexture();const bS=(BOARD_SIZE*1.2)+((BOARD_SIZE-1)*0.2);const gG=new THREE.BoxGeometry(bS,bS,bS);const gM=new THREE.MeshBasicMaterial({map:gT,transparent:true,opacity:0.3,side:THREE.BackSide});const gB=new THREE.Mesh(gG,gM);boardGroup.add(gB);
             animate();
         }
 
         function animate(time){requestAnimationFrame(animate);for(let i=activeAnimations.length-1;i>=0;i--){const a=activeAnimations[i];if(a.type==='scale'){a.progress=Math.min(1,a.progress+0.05);const s=0.1+(0.9*a.progress);a.mesh.scale.set(s,s,s);if(a.progress>=1)activeAnimations.splice(i,1);}else if(a.type==='linePulse'){a.material.opacity=Math.sin(time*0.01)*0.45+0.55;}}if(reflectionSphere){reflectionSphere.visible=false;cubeCamera.update(renderer,scene);reflectionSphere.visible=true;}controls.update();renderer.render(scene,camera);}
-        
-        function createWinningLine(line, player) {
-            const startPos=pieceGroups[`${line[0].x}-${line[0].y}-${line[0].z}`].position;const endPos=pieceGroups[`${line[3].x}-${line[3].y}-${line[3].z}`].position;
-            const distance=startPos.distanceTo(endPos);const lineGeo=new THREE.CylinderGeometry(0.15,0.15,distance,8);const color=player===1?0xff0000:0x00ffff;
-            const lineMat=new THREE.MeshBasicMaterial({color:color,transparent:true,opacity:1,toneMapped:false});winningLineMesh=new THREE.Mesh(lineGeo,lineMat);
-            winningLineMesh.position.copy(startPos).add(endPos).multiplyScalar(0.5);
-            const up=new THREE.Vector3(0,1,0);const direction=new THREE.Vector3().subVectors(endPos,startPos).normalize();
-            const quaternion=new THREE.Quaternion().setFromUnitVectors(up,direction);winningLineMesh.quaternion.copy(quaternion);
-            scene.add(winningLineMesh);return lineMat;
-        }
-
+        function createWinningLine(line,player){const sP=pieceGroups[`${line[0].x}-${line[0].y}-${line[0].z}`].position;const eP=pieceGroups[`${line[3].x}-${line[3].y}-${line[3].z}`].position;const d=sP.distanceTo(eP);const lG=new THREE.CylinderGeometry(0.15,0.15,d,8);const c=player===1?0xff0000:0x00ffff;const lM=new THREE.MeshBasicMaterial({color:c,transparent:true,opacity:1,toneMapped:false});winningLineMesh=new THREE.Mesh(lG,lM);winningLineMesh.position.copy(sP).add(eP).multiplyScalar(0.5);const up=new THREE.Vector3(0,1,0);const dir=new THREE.Vector3().subVectors(eP,sP).normalize();const q=new THREE.Quaternion().setFromUnitVectors(up,dir);winningLineMesh.quaternion.copy(q);scene.add(winningLineMesh);return lM;}
         function startPlacementAnimation(mesh){mesh.scale.set(0.1,0.1,0.1);activeAnimations.push({mesh,type:'scale',progress:0});}
-        function startWinAnimation(wL){const player=board[wL[0].z][wL[0].y][wL[0].x];const lineMaterial=createWinningLine(wL,player);activeAnimations.push({material:lineMaterial,type:'linePulse'});}
+        function startWinAnimation(wL){const p=board[wL[0].z][wL[0].y][wL[0].x];const lM=createWinningLine(wL,p);activeAnimations.push({material:lM,type:'linePulse'});}
         function placePieceAndAnimate(x,y,z,p){if(placePiece(x,y,z,p)){const pG=pieceGroups[`${x}-${y}-${z}`];pG.visible=true;pG.children[0].visible=(p===1);pG.children[1].visible=(p===2);startPlacementAnimation(pG);}}
 
         // ----- INPUT & KONTROL -----
@@ -163,13 +139,16 @@
         function updatePreviewPiecePosition(){if(!selectedColumn||previewZ===-1){if(previewPiece)previewPiece.visible=false;return;};const key=`${selectedColumn.x}-${selectedColumn.y}-${previewZ}`;previewPiece.position.copy(pieceGroups[key].position);previewPiece.visible=true;}
 
         // ----- EVENT LISTENERS -----
-        init3D();initializeBoard();
-        document.getElementById('gameCanvas').addEventListener('pointermove',handleHover);
-        document.getElementById('gameCanvas').addEventListener('click',handleClick);
-        document.getElementById('gameCanvas').addEventListener('contextmenu',handleRightClick);
-        window.addEventListener('keydown',handleKeyDown);
-        window.addEventListener('resize',onWindowResize);
-        document.getElementById('resetButton').addEventListener('click',initializeBoard);
+        window.onload = () => {
+            init3D();
+            initializeBoard();
+            document.getElementById('gameCanvas').addEventListener('pointermove',handleHover);
+            document.getElementById('gameCanvas').addEventListener('click',handleClick);
+            document.getElementById('gameCanvas').addEventListener('contextmenu',handleRightClick);
+            window.addEventListener('keydown',handleKeyDown);
+            window.addEventListener('resize',onWindowResize);
+            document.getElementById('resetButton').addEventListener('click',initializeBoard);
+        };
     </script>
 </body>
 </html>
