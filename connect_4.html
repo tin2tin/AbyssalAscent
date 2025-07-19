@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tænk Dig Om - 3D (Grøn Neon)</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #1a1a1a; color: white; font-family: sans-serif; display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; }
+        #gameContainer { display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%; box-sizing: border-box; }
+        canvas { display: block; cursor: pointer; border: 2px solid #333; box-sizing: border-box; background-color: #1a1a1a; width: 100%; height: 100%; max-width: 95vw; max-height: 80vh; }
+        .controls-wrapper { display: flex; flex-direction: column; align-items: center; gap: 15px; margin-top: 15px; }
+        .controls-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+        button { padding: 10px 15px; font-size: 1em; cursor: pointer; background-color: #555; color: white; border: none; border-radius: 5px; transition: background-color 0.2s; }
+        button:hover { background-color: #777; }
+        #status { font-size: 1.2em; text-align: center; height: 1.5em; }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <div id="status">Venter på spillets start...</div>
+        <canvas id="gameCanvas"></canvas>
+        <div class="controls-wrapper">
+            <div id="mainControls" class="controls-row">
+                <button id="resetGame">Nulstil Spil</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+
+    <script>
+        // ----- GLOBALE VARIABLER OG KONSTANTER -----
+        const BOARD_SIZE = 4;
+        let board = [], currentPlayer = 1, gameOver = false;
+        let gameState = 'SELECT_COLUMN', selectedColumn = null, previewZ = -1;
+        let scene, camera, renderer, controls, boardGroup, boxHelper;
+        let pieceGroups = {}, cellMeshes = {}, previewPiece, lastAiPieceMesh = null;
+        let player1Material, player2Material, player1PreviewMaterial, defaultFieldMaterial, hoverMaterial, player2LastMoveMaterial;
+        
+        // ----- SPILLETS LOGIK FUNKTIONER -----
+        function initializeBoard() {
+            board = Array(BOARD_SIZE).fill(0).map(() => Array(BOARD_SIZE).fill(0).map(() => Array(BOARD_SIZE).fill(0)));
+            currentPlayer = 1;
+            gameOver = false;
+            resetTurnState();
+            updateStatus("Vælg en kolonne ved at klikke.");
+            update3D();
+        }
+        function placePiece(x,y,z,p){if(gameOver||z<0||board[z][y][x]!==0)return false;board[z][y][x]=p;return true;}
+        function checkLine(x,y,z,dx,dy,dz,p){let w=[];for(let i=0;i<4;i++){const cX=x+i*dx,cY=y+i*dy,cZ=z+i*dz;if(cX<0||cX>=4||cY<0||cY>=4||cZ<0||cZ>=4||board[cZ][cY][cX]!==p)return false;w.push({x:cX,y:cY,z:cZ});}return w;}
+        function checkWin(p){const D=[[1,0,0],[0,1,0],[0,0,1],[1,1,0],[1,-1,0],[1,0,1],[1,0,-1],[0,1,1],[0,1,-1],[1,1,1],[1,1,-1],[1,-1,1],[1,-1,-1]];for(let z=0;z<4;z++)for(let y=0;y<4;y++)for(let x=0;x<4;x++)for(const d of D){const r=checkLine(x,y,z,d[0],d[1],d[2],p);if(r)return r;}return false;}
+        function checkDraw(){return board.every(p=>p.every(r=>r.every(c=>c!==0)));}
+        function findBestMove(){for(let p of[2,1]){for(let z=0;z<4;z++)for(let y=0;y<4;y++)for(let x=0;x<4;x++)if(board[z][y][x]===0){board[z][y][x]=p;const w=checkWin(p);if(w){board[z][y][x]=0;return{x,y,z};}board[z][y][x]=0;}}const a=[];for(let z=0;z<4;z++)for(let y=0;y<4;y++)for(let x=0;x<4;x++)if(board[z][y][x]===0)a.push({x,y,z});return a.length>0?a[Math.floor(Math.random()*a.length)]:null;}
+        function aiTurn(){const m=findBestMove();if(m&&placePiece(m.x,m.y,m.z,2)){update3D(m);const w=checkWin(2);if(w){drawWinningLine(w,2);updateStatus("AI (Blå) vandt!");gameOver=true;}else if(checkDraw()){updateStatus("Uafgjort!");gameOver=true;}else{currentPlayer=1;updateStatus("Vælg en kolonne ved at klikke.");}}else{updateStatus("AI kan ikke finde træk. Din tur.");currentPlayer=1;}};
+        function updateStatus(msg){document.getElementById('status').innerText=msg;}
+
+        // ----- 3D SETUP OG RENDERING -----
+        function init3D() {
+            const canvas = document.getElementById('gameCanvas');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x1a1a1a);
+            camera = new THREE.PerspectiveCamera(75, canvas.clientWidth/canvas.clientHeight, 0.1, 1000);
+            camera.position.set(BOARD_SIZE*2.8, BOARD_SIZE*2.8, BOARD_SIZE*2.8);
+            renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+            onWindowResize();
+            scene.add(new THREE.AmbientLight(0xffffff,0.9));
+            const light = new THREE.DirectionalLight(0xffffff, 0.7);
+            light.position.set(5, 10, 7.5);
+            scene.add(light);
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+            
+            const emissiveIntensity=0.3;
+            player1Material=new THREE.MeshStandardMaterial({color:0xff1a1a,emissive:0x660000,emissiveIntensity:emissiveIntensity});
+            player2Material=new THREE.MeshStandardMaterial({color:0x0056b3,emissive:0x002266,emissiveIntensity:emissiveIntensity});
+            player1PreviewMaterial=new THREE.MeshStandardMaterial({color:0xFF1493, emissive:0xCC1076, emissiveIntensity:emissiveIntensity});
+            
+            // RETTELSE: Opdaterede farver for felt-kuber og hover
+            defaultFieldMaterial=new THREE.MeshStandardMaterial({color:0x334433,transparent:true,opacity:0.15});
+            hoverMaterial=new THREE.MeshStandardMaterial({color:0xccffcc,transparent:true,opacity:0.3});
+            player2LastMoveMaterial=new THREE.MeshStandardMaterial({color:0x40C4FF,emissive:0x60AFFF,emissiveIntensity:0.5});
+            
+            const ringGeo=new THREE.TorusGeometry(1.2*0.35,1.2*0.1,16,32);const ring1=new THREE.Mesh(ringGeo);const ring2=new THREE.Mesh(ringGeo);ring2.rotation.y=Math.PI/2;const player1Geometry=new THREE.Group().add(ring1,ring2);
+            const barGeo=new THREE.BoxGeometry(1.2*0.8,1.2*0.18,1.2*0.18);const cross1=new THREE.Mesh(barGeo);const cross2=new THREE.Mesh(barGeo);const cross3=new THREE.Mesh(barGeo);cross2.rotation.z=Math.PI/2;cross3.rotation.y=Math.PI/2;const player2Geometry=new THREE.Group().add(cross1,cross2,cross3);
+
+            boardGroup=new THREE.Group();scene.add(boardGroup);
+            const offset=(4*1.2+(4-1)*0.2)/2-1.2/2;
+            for(let z=0;z<4;z++)for(let y=0;y<4;y++)for(let x=0;x<4;x++){const pos={x:x*(1.2+0.2)-offset,y:y*(1.2+0.2)-offset,z:z*(1.2+0.2)-offset};const key=`${x}-${y}-${z}`;const cellMesh=new THREE.Mesh(new THREE.BoxGeometry(1.2,1.2,1.2),defaultFieldMaterial.clone());cellMesh.position.set(pos.x,pos.y,pos.z);cellMesh.userData={x,y,z};boardGroup.add(cellMesh);cellMeshes[key]=cellMesh;const p1=player1Geometry.clone();p1.children.forEach(c=>c.material=player1Material);const p2=player2Geometry.clone();p2.children.forEach(c=>c.material=player2Material);const pG=new THREE.Group().add(p1,p2);pG.position.set(pos.x,pos.y,pos.z);pG.visible=false;boardGroup.add(pG);pieceGroups[key]=pG;}
+            
+            previewPiece=player1Geometry.clone();previewPiece.children.forEach(c=>c.material=player1PreviewMaterial);previewPiece.visible=false;scene.add(previewPiece);
+            boxHelper=new THREE.BoxHelper(boardGroup, 0x39ff14);
+            scene.add(boxHelper);
+            animate();
+        }
+        function update3D(aiMoveCoords = null){
+            for(let z=0;z<4;z++)for(let y=0;y<4;y++)for(let x=0;x<4;x++){
+                const pG=pieceGroups[`${x}-${y}-${z}`];
+                const p1=pG.children[0];
+                const p2=pG.children[1];
+                const cV=board[z][y][x];
+                pG.visible=(cV!==0);
+                if(cV!==0){
+                    p1.visible=(cV===1);
+                    p2.visible=(cV===2);
+                    if(cV===2){
+                        const isLastMove = aiMoveCoords && aiMoveCoords.x===x && aiMoveCoords.y===y && aiMoveCoords.z===z;
+                        p2.children.forEach(c => c.material = isLastMove ? player2LastMoveMaterial : player2Material);
+                        if(isLastMove) lastAiPieceMesh = p2;
+                    }
+                }
+            }
+        }
+        function animate(){requestAnimationFrame(animate);controls.update();boxHelper.update();renderer.render(scene,camera);}
+
+        function drawWinningLine(pieces, winner) {
+            const startPos = pieceGroups[`${pieces[0].x}-${pieces[0].y}-${pieces[0].z}`].position.clone();
+            const endPos = pieceGroups[`${pieces[3].x}-${pieces[3].y}-${pieces[3].z}`].position.clone();
+            const distance = startPos.distanceTo(endPos);
+            const geometry = new THREE.CylinderGeometry(0.1, 0.1, distance, 8);
+            const material = new THREE.MeshBasicMaterial({ color: (winner === 1) ? 0xff1a1a : 0x007bff });
+            winningLine = new THREE.Mesh(geometry, material);
+            winningLine.position.copy(startPos).lerp(endPos, 0.5);
+            const direction = new THREE.Vector3().subVectors(endPos, startPos).normalize();
+            winningLine.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
+            scene.add(winningLine);
+        }
+
+        // ----- INPUT & KONTROL FUNKTIONER -----
+        function onWindowResize(){const c=document.getElementById('gameCanvas');renderer.setSize(c.clientWidth,c.clientHeight);camera.aspect=c.clientWidth/c.clientHeight;camera.updateProjectionMatrix();}
+        function getIntersect(event){const r=document.getElementById('gameCanvas').getBoundingClientRect();const m={x:((event.clientX-r.left)/r.width)*2-1,y:-((event.clientY-r.top)/r.height)*2+1};const c=new THREE.Raycaster();c.setFromCamera(m,camera);const i=c.intersectObjects(Object.values(cellMeshes));return i.length>0?i[0].object:null;}
+
+        function handleHover(event){if(gameState!=='SELECT_COLUMN')return;Object.values(cellMeshes).forEach(cell=>cell.material.opacity=0.15);const i=getIntersect(event);if(i){const{x,y}=i.userData;for(let z=0;z<4;z++){cellMeshes[`${x}-${y}-${z}`].material.opacity=0.3;}}}
+        function handleClick(event) {
+            if (gameOver || currentPlayer !== 1 || gameState !== 'SELECT_COLUMN') return;
+            const intersectedObj = getIntersect(event);
+            if (!intersectedObj) return;
+            selectedColumn = intersectedObj.userData;
+            previewZ = findNextAvailableZ(selectedColumn.x, selectedColumn.y, BOARD_SIZE - 1);
+            if (previewZ !== -1) {
+                gameState = 'CHOOSE_Z';
+                updatePreviewPiecePosition();
+                updateStatus("Brug SPACE til at flytte. ENTER for at placere. ESC/Højreklik for at annullere.");
+            } else {
+                updateStatus("Kolonnen er fuld. Vælg en anden.");
+                selectedColumn = null;
+            }
+        }
+        function handleKeyDown(event) {
+            if (gameOver || currentPlayer !== 1 || gameState !== 'CHOOSE_Z') return;
+            if (event.code === 'Space') {event.preventDefault();previewZ = findNextAvailableZ(selectedColumn.x, selectedColumn.y, previewZ - 1);updatePreviewPiecePosition();}
+            else if (event.code === 'Enter') {event.preventDefault();finalizePlayerMove();}
+            else if (event.code === 'Escape') {event.preventDefault();resetTurnState();updateStatus("Træk annulleret. Vælg en ny kolonne.");}
+        }
+        function finalizePlayerMove() {
+            if (!selectedColumn) return;
+            const { x, y } = selectedColumn;
+            if (placePiece(x, y, previewZ, 1)) {
+                if (lastAiPieceMesh) {
+                    lastAiPieceMesh.children.forEach(c => c.material = player2Material);
+                    lastAiPieceMesh = null;
+                }
+                update3D();
+                resetTurnState();
+                const winningPieces = checkWin(1);
+                if (winningPieces) {drawWinningLine(winningPieces, 1);updateStatus("Tillykke, du vandt!");gameOver = true;return;}
+                if (checkDraw()) {updateStatus("Uafgjort!");gameOver = true;return;}
+                currentPlayer = 2;
+                updateStatus("AI (Blå) tænker...");
+                setTimeout(aiTurn, 500);
+            }
+        }
+        function resetTurnState() {
+            gameState = 'SELECT_COLUMN';
+            if(previewPiece) previewPiece.visible = false;
+            selectedColumn = null;
+            previewZ = -1;
+            Object.values(cellMeshes).forEach(cell => cell.material.opacity = 0.15);
+        }
+        function findNextAvailableZ(x, y, startZ) {
+            for (let z=startZ; z>=0; z--) if(board[z][y][x]===0)return z;
+            for (let z=BOARD_SIZE-1; z>startZ; z--) if(board[z][y][x]===0)return z;
+            return -1;
+        }
+        function updatePreviewPiecePosition() {
+            if (!selectedColumn || previewZ === -1) { if(previewPiece) previewPiece.visible = false; return; };
+            const key = `${selectedColumn.x}-${selectedColumn.y}-${previewZ}`;
+            previewPiece.position.copy(pieceGroups[key].position);
+            previewPiece.visible = true;
+        }
+        
+        function handleRightClick(event) {
+            event.preventDefault();
+            if(gameState === 'CHOOSE_Z') {
+                resetTurnState();
+                updateStatus("Træk annulleret. Vælg en ny kolonne.");
+            }
+        }
+
+        // ----- EVENT LISTENERS -----
+        window.onload = () => {
+            init3D();
+            initializeBoard();
+            const canvas = document.getElementById('gameCanvas');
+            canvas.addEventListener('pointermove', handleHover);
+            canvas.addEventListener('click', handleClick);
+            canvas.addEventListener('contextmenu', handleRightClick);
+            window.addEventListener('keydown', handleKeyDown);
+            window.addEventListener('resize', onWindowResize);
+            document.getElementById('resetGame').addEventListener('click',initializeBoard);
+        };
+    </script>
+</body>
+</html>
