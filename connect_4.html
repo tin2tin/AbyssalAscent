@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tænk Dig Om - Neon Reflektion v6 (Robust)</title>
+    <title>Tænk Dig Om - Neon Reflektion v7 (Maksimalt Kompatibel)</title>
     <style>
         body, html {
             margin: 0;
@@ -138,8 +138,8 @@
         function findNextAvailableZ(x,y,sZ){for(let z=sZ;z>=0;z--)if(board[z][y][x]===0)return z;for(let z=BOARD_SIZE-1;z>sZ;z--)if(board[z][y][x]===0)return z;return -1;}
         function updatePreviewPiecePosition(){if(!selectedColumn||previewZ===-1){if(previewPiece)previewPiece.visible=false;return;};const key=`${selectedColumn.x}-${selectedColumn.y}-${previewZ}`;previewPiece.position.copy(pieceGroups[key].position);previewPiece.visible=true;}
 
-        // ----- EVENT LISTENERS -----
-        window.onload = () => {
+        // ----- SIKKER OPSTART AF SPILLET -----
+        function startGame() {
             init3D();
             initializeBoard();
             document.getElementById('gameCanvas').addEventListener('pointermove',handleHover);
@@ -148,7 +148,22 @@
             window.addEventListener('keydown',handleKeyDown);
             window.addEventListener('resize',onWindowResize);
             document.getElementById('resetButton').addEventListener('click',initializeBoard);
-        };
+        }
+
+        // Aktiv polling for at sikre at Three.js er indlæst
+        function waitForThree() {
+            if (typeof THREE !== 'undefined' && THREE.OrbitControls && THREE.RGBELoader) {
+                // Værktøjet er klar, start spillet!
+                startGame();
+            } else {
+                // Værktøjet er ikke klar, vent 100ms og tjek igen
+                setTimeout(waitForThree, 100);
+            }
+        }
+
+        // Start venteprocessen
+        waitForThree();
+
     </script>
 </body>
 </html>
